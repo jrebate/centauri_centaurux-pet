@@ -152,6 +152,17 @@ rep("""  const start = () => requestAnimationFrame(frame);""", """  // Hooks for
         return p;
       });
       if (!next.length) return;
+      // Keep missions that vanished from the file (another chat may have overwritten it without
+      // merging), so they don't disappear from the pet. Demo projects are never kept.
+      if (window.__seenReal) {
+        const names = new Set(next.map(p => p.name));
+        projects.forEach(p => {
+          if (names.has(p.name) || next.length >= 8) return;
+          if (['thinking', 'working'].includes(p.state)) setState(p, 'sleeping', 'Sin noticias');
+          next.push(p);
+        });
+      }
+      window.__seenReal = true;
       const cur = projects[idx] && projects[idx].name;
       projects.splice(0, projects.length, ...next);
       idx = Math.max(0, projects.findIndex(p => p.name === cur));
