@@ -1,0 +1,38 @@
+{
+ "projects": [
+  {
+   "name": "Web del portfolio",
+   "state": "working",
+   "status": "Creando la galería de casos",
+   "updatedAt": "2026-01-01T10:00:00Z",
+   "forja": {
+    "objeto": "espada",
+    "nombre": "Espada del portfolio",
+    "piezas": [
+     { "nombre": "Leer el código", "hecha": true },
+     { "nombre": "Nueva portada", "hecha": true },
+     { "nombre": "Galería de casos", "hecha": false },
+     { "nombre": "Formulario", "hecha": false },
+     { "nombre": "Publicar", "hecha": false }
+    ]
+   }
+  },
+  {
+   "name": "Informe trimestral",
+   "state": "waiting",
+   "status": "¿Incluyo los datos de marzo?",
+   "updatedAt": "2026-01-01T10:00:00Z",
+   "forja": {
+    "objeto": "tomo",
+    "nombre": "Tomo del informe",
+    "piezas": [
+     { "nombre": "Recoger datos", "hecha": true },
+     { "nombre": "Redactar", "hecha": false },
+     { "nombre": "Revisar", "hecha": false }
+    ]
+   }
+  },
+  { "name": "Comparativa de herramientas", "state": "happy", "status": "Comparativa terminada", "updatedAt": "2026-01-01T10:00:00Z" },
+  { "name": "Bot de Telegram", "state": "sleeping", "status": "Sin tareas ahora", "updatedAt": "2026-01-01T10:00:00Z" }
+ ]
+}

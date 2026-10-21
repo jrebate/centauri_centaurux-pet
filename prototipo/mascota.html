@@ -1,0 +1,959 @@
+<title>Mascota de escritorio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@400;600&family=Tiny5&family=VT323&display=swap">
+<style>
+/* Layout: the device mock-up on the left, a small simulator panel on the right; stacks on narrow screens. */
+:root {
+  --bg: #eef0f3;
+  --fg: #1d2330;
+  --muted: #5d6676;
+  --panel: #ffffff;
+  --line: #d7dbe2;
+  --accent: #c8643f;
+  --chip: #f2f3f6;
+  /* The device itself keeps one look in both themes */
+  --shell: #d9d4cb;
+  --shell-edge: #bdb6aa;
+  --shell-dark: #2a2724;
+  --ptt: #e07a4f;
+  --display: "Nunito", ui-rounded, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15181e; --fg: #e8ebf0; --muted: #9aa3b2; --panel: #1e222a; --line: #30353f; --accent: #e8875f; --chip: #272c35;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15181e; --fg: #e8ebf0; --muted: #9aa3b2; --panel: #1e222a; --line: #30353f; --accent: #e8875f; --chip: #272c35;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--display);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+header h1 { font-size: 26px; font-weight: 800; margin: 0; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 65ch; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+/* Device */
+.device {
+  background: linear-gradient(160deg, #e4dfd6, var(--shell) 60%, #cfc9be);
+  border: 1px solid var(--shell-edge);
+  border-radius: 34px;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 20px;
+  box-shadow: 0 20px 50px -20px rgba(20, 16, 10, .45), inset 0 1px 0 rgba(255,255,255,.6);
+}
+.bezel { background: #0b0a09; border-radius: 16px; padding: 12px; box-shadow: inset 0 0 0 2px #1d1b19; min-width: 0; }
+canvas#screen { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; border-radius: 6px; background: #121010; max-width: 100%; }
+.controls { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 18px; padding-block: 6px; }
+.wheel-slot { background: var(--shell-dark); border-radius: 40px; padding: 8px; box-shadow: inset 0 3px 8px rgba(0,0,0,.6); }
+.wheel {
+  width: 52px; height: 190px; border-radius: 26px; border: 0; cursor: ns-resize; touch-action: none;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.45), rgba(255,255,255,.08) 30%, rgba(255,255,255,.12) 50%, rgba(0,0,0,.45)),
+    repeating-linear-gradient(180deg, #4a4642 0 6px, #2e2b28 6px 12px);
+  background-size: 100% 100%, 100% 12px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.wheel:focus-visible, .ptt:focus-visible, .seg button:focus-visible, .toggle input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 3px; }
+.wheel.pressed { transform: scale(.97); }
+.ptt {
+  width: 76px; height: 76px; border-radius: 50%; border: 0; cursor: pointer; touch-action: none;
+  background: radial-gradient(circle at 35% 30%, #f3a27f, var(--ptt) 55%, #b9572f);
+  box-shadow: 0 5px 0 #8e4123, 0 10px 18px -6px rgba(0,0,0,.45);
+  color: #fff6f0; font: 800 11px/1 var(--display); letter-spacing: .08em; text-transform: uppercase;
+  transition: transform .08s, box-shadow .08s;
+}
+.ptt.down { transform: translateY(4px); box-shadow: 0 1px 0 #8e4123, 0 4px 10px -4px rgba(0,0,0,.45); }
+.ctl-label { font: 600 10px/1.2 var(--mono); color: #6f685e; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+.ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+@media (max-width: 620px) {
+  .device { grid-template-columns: minmax(0, 1fr); padding: 14px; border-radius: 26px; }
+  .controls { flex-direction: row; justify-content: center; gap: 36px; }
+  .wheel-slot { padding: 6px; }
+  .wheel { width: 160px; height: 46px; cursor: ew-resize;
+    background:
+      linear-gradient(180deg, rgba(0,0,0,.45), rgba(255,255,255,.1) 50%, rgba(0,0,0,.45)),
+      repeating-linear-gradient(90deg, #4a4642 0 6px, #2e2b28 6px 12px);
+    background-size: 100% 100%, 12px 100%; }
+}
+
+/* Panel */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.panel h2 { font-size: 17px; font-weight: 800; margin: 0; }
+.panel h3 { font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.current { font-weight: 700; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg button {
+  font: 700 13px/1.2 var(--display); color: var(--fg); background: var(--chip); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left;
+}
+.seg button .dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.seg button b { display: block; font-weight: 800; }
+.seg button small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+.seg button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.toggles { display: flex; flex-direction: column; gap: 10px; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.toggle span.sw { width: 40px; height: 22px; border-radius: 11px; background: var(--line); position: relative; flex: none; transition: background .15s; }
+.toggle span.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.toggle input:checked + span.sw { background: var(--accent); }
+.toggle input:checked + span.sw::after { transform: translateX(18px); }
+.keys { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; font-size: 13.5px; }
+.keys dt { font: 600 12px/1.6 var(--mono); color: var(--muted); }
+.keys dd { margin: 0; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: reduce) { .ptt, .toggle span.sw, .toggle span.sw::after { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Mascota de escritorio</h1>
+    <p>Tu centauro nórdico en una pantalla de 800 × 480. Cada proyecto es una misión: gira la rueda para cambiar de misión, púlsala para abrir el diario y mantén el botón naranja para hablarle.</p>
+  </header>
+
+  <div class="main">
+    <div class="device" aria-label="Dispositivo simulado">
+      <div class="bezel"><canvas id="screen" width="800" height="480" role="img" aria-label="Pantalla de la mascota"></canvas></div>
+      <div class="controls">
+        <div class="ctl">
+          <div class="wheel-slot"><button class="wheel" id="wheel" aria-label="Rueda: gira para cambiar de proyecto, pulsa para ver el detalle"></button></div>
+          <div class="ctl-label">Rueda</div>
+        </div>
+        <div class="ctl">
+          <button class="ptt" id="ptt" aria-label="Mantén pulsado para hablar">Hablar</button>
+          <div class="ctl-label">Mantén</div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div>
+        <h2>Simulador</h2>
+        <p class="note">Los proyectos y mensajes son de ejemplo. Más adelante vendrán de tus sesiones reales de Claude.</p>
+      </div>
+      <div>
+        <h3>Estado de <span class="current" id="curName"></span></h3>
+        <div class="seg" id="seg"></div>
+      </div>
+      <div>
+        <h3>Personaje</h3>
+        <div class="seg" id="chars">
+          <button type="button" data-char="centaur" aria-pressed="true"><span><b>Centauro nórdico</b><small>Tú decides, la IA tira</small></span></button>
+          <button type="button" data-char="nord" aria-pressed="false"><span><b>Guerrero nórdico</b><small>La primera versión</small></span></button>
+        </div>
+      </div>
+      <div class="toggles">
+        <label class="toggle" for="auto"><span>Demo automática</span><input type="checkbox" id="auto" checked><span class="sw"></span></label>
+        <label class="toggle" for="sound"><span>Sonido de aviso</span><input type="checkbox" id="sound"><span class="sw"></span></label>
+      </div>
+      <div>
+        <h3>Teclado</h3>
+        <dl class="keys">
+          <dt>↑ ↓</dt><dd>Girar la rueda</dd>
+          <dt>Enter</dt><dd>Pulsar la rueda</dd>
+          <dt>Espacio</dt><dd>Mantener para hablar</dd>
+          <dt>Esc</dt><dd>Volver</dd>
+        </dl>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const W = 800, H = 480;
+  const canvas = document.getElementById('screen');
+  const ctx = canvas.getContext('2d');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+
+  const PIX = '"Tiny5", "VT323", monospace';
+  const TXT = '"VT323", "JetBrains Mono", monospace';
+
+  const STATES = {
+    sleeping:  { label: 'Descansa',   meaning: 'Sin actividad',    color: '#8fa0bf' },
+    thinking:  { label: 'Estudia',    meaning: 'Pensando',         color: '#b3a4ff' },
+    working:   { label: 'Forja',      meaning: 'Trabajando',       color: '#ff9a5c' },
+    waiting:   { label: 'Te llama',   meaning: 'Necesita permiso', color: '#f6c945' },
+    happy:     { label: '¡Victoria!', meaning: 'Tarea hecha',      color: '#7ddc8f' },
+    worried:   { label: 'Herido',     meaning: 'Algo falló',       color: '#ff6464' },
+    listening: { label: 'Escucha',    meaning: 'Te oye',           color: '#62d0f5' },
+  };
+  const PICKABLE = ['sleeping', 'thinking', 'working', 'waiting', 'happy', 'worried'];
+
+  const POOL = {
+    sleeping: ['Sin sesiones abiertas', 'Descansando junto al fuego'],
+    thinking: ['Leyendo el código del proyecto', 'Pensando cómo hacerlo', 'Revisando README.md', 'Buscando dónde está el fallo'],
+    working: ['Editando src/App.tsx', 'Ejecutando npm test', 'Escribiendo pantalla.py', 'Creando el componente Menu', 'Instalando dependencias'],
+    waiting: ['¿Puedo instalar pyserial?', '¿Borro la carpeta build?', '¿Qué color prefieres para el botón?', 'Necesito permiso para hacer git push'],
+    happy: ['Tarea terminada', 'Tests pasados: 42 de 42', 'Cambios subidos a GitHub'],
+    worried: ['Falló npm run build', 'No encuentra el módulo serial', '3 tests fallan'],
+  };
+
+  const now = () => performance.now() / 1000;
+  const t0 = now();
+  const projects = [
+    { name: 'Claude de escritorio', state: 'waiting',  status: '¿Puedo instalar pyserial?',
+      forja: { objeto: 'tomo', nombre: 'Tomo de la mascota', piezas: [{ nombre: 'Dibujar al centauro', hecha: true }, { nombre: 'App de escritorio', hecha: true }, { nombre: 'Conectar con Cowork', hecha: false }] } },
+    { name: 'web-portfolio',        state: 'working',  status: 'Editando src/App.tsx',
+      forja: { objeto: 'espada', nombre: 'Espada del portfolio', piezas: [{ nombre: 'Leer el código', hecha: true }, { nombre: 'Nueva portada', hecha: true }, { nombre: 'Galería de casos', hecha: false }, { nombre: 'Formulario', hecha: false }, { nombre: 'Publicar', hecha: false }] } },
+    { name: 'bot-telegram',         state: 'happy',    status: 'Tests pasados: 42 de 42' },
+    { name: 'app-recetas',          state: 'worried',  status: 'Falló npm run build' },
+    { name: 'scripts-casa',         state: 'sleeping', status: 'Sin sesiones abiertas' },
+  ].map((p, i) => ({
+    ...p,
+    since: t0 - 30 - i * 70,
+    log: [
+      { at: t0 - 600 - i * 50, text: 'Sesión iniciada' },
+      { at: t0 - 320 - i * 40, text: POOL.thinking[i % POOL.thinking.length] },
+      { at: t0 - 150 - i * 30, text: POOL.working[i % POOL.working.length] },
+      { at: t0 - 30 - i * 70, text: p.status },
+    ],
+  }));
+
+  let idx = 0;
+  let view = 'pet';
+  let listening = false, listenStart = 0;
+  let answer = null;           // { text, thinkUntil, until }
+  let slide = { dir: 0, at: -10 };
+  let particles = [];
+  let nextBlink = now() + 2, blinkAt = -10;
+
+  function currentState() {
+    if (listening) return 'listening';
+    if (answer && now() < answer.thinkUntil) return 'thinking';
+    return projects[idx].state;
+  }
+
+  function setState(p, state, status) {
+    if (p.state === state && !status) return;
+    p.state = state;
+    p.status = status || POOL[state][Math.floor(Math.random() * POOL[state].length)];
+    p.since = now();
+    p.log.push({ at: p.since, text: p.status });
+    if (p === projects[idx]) particles = [];
+    if (p.log.length > 8) p.log.shift();
+    if (['waiting', 'happy', 'worried'].includes(state)) chirp(state);
+    if (p.forja && !window.__realData) {
+      // Demo only: the forge advances as the fake work goes on
+      if (state === 'happy') p.forja.piezas.forEach(x => { x.hecha = true; });
+      else if (state === 'working' && Math.random() < 0.6) { const n = p.forja.piezas.find(x => !x.hecha); if (n) n.hecha = true; }
+      else if (state === 'thinking' && p.forja.piezas.every(x => x.hecha)) p.forja.piezas.forEach(x => { x.hecha = false; });
+    }
+    syncPanel();
+  }
+
+  // ---------- Sound (8-bit style) ----------
+  let audio = null;
+  const soundBox = document.getElementById('sound');
+  function ensureAudio() {
+    if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audio = null; } }
+    if (audio && audio.state === 'suspended') audio.resume();
+  }
+  function chirp(kind) {
+    if (!soundBox.checked || !audio) return;
+    const notes = { waiting: [784, 1047, 784, 1047], happy: [523, 659, 784, 1047], worried: [392, 311, 262] }[kind] || [700];
+    notes.forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      const t = audio.currentTime + i * 0.09;
+      o.type = 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.06, t);
+      g.gain.setValueAtTime(0.0001, t + 0.08);
+      o.connect(g).connect(audio.destination); o.start(t); o.stop(t + 0.09);
+    });
+  }
+
+  // ---------- Helpers ----------
+  function wrap(text, maxW, font) {
+    ctx.font = font;
+    const words = text.split(' '); const lines = []; let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function ago(sec) {
+    sec = Math.max(0, Math.round(sec));
+    if (sec < 60) return 'ahora';
+    const m = Math.round(sec / 60);
+    return m < 60 ? `hace ${m} min` : `hace ${Math.round(m / 60)} h`;
+  }
+  const ease = p => 1 - Math.pow(1 - Math.min(1, Math.max(0, p)), 3);
+  const snap = (v, u) => Math.round(v / u) * u;
+  function box(x, y, w, h, fill, border = '#e9dcc0', inner = '#5d4a33') {
+    ctx.fillStyle = border; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = inner; ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
+    ctx.fillStyle = fill; ctx.fillRect(x + 6, y + 6, w - 12, h - 12);
+    // notched corners
+    ctx.fillStyle = '#0d0f17';
+    [[x, y], [x + w - 4, y], [x, y + h - 4], [x + w - 4, y + h - 4]].forEach(([a, b]) => ctx.fillRect(a, b, 4, 4));
+  }
+
+  // ---------- The Nord ----------
+  const C = {
+    steel: '#a3acb7', steelD: '#5f6873', steelL: '#dde3e9',
+    horn: '#ece0c4', hornD: '#b8a37f', hornT: '#fff6e0',
+    skin: '#f2b88e', skinD: '#cf8c66', blush: '#f38b8b',
+    beard: '#d9733a', beardD: '#a24f1e', beardL: '#f3a05e',
+    mail: '#6f7b8c', mailD: '#4c5564', mailL: '#8e9aab',
+    fur: '#8a6a4a', furL: '#c09a6c', belt: '#5a3a22', gold: '#f2c14e',
+    pants: '#3b3346', boot: '#5e3d24', eye: '#1b120e', white: '#ffffff',
+    wood: '#7a5233', parch: '#efe0b8', parchD: '#c9b27f', ink: '#7a6a4a',
+  };
+
+  // Draws the character with r(x, y, w, h, colour) in a 32-wide grid.
+  function nord(r, pose) {
+    const m = (x, y, w, h, c) => { r(x, y, w, h, c); r(32 - x - w, y, w, h, c); };
+    // horns
+    m(7, 8, 2, 2, C.hornD); m(5, 7, 2, 2, C.horn); m(4, 5, 2, 2, C.horn); m(3, 3, 2, 2, C.horn); m(3, 2, 1, 1, C.hornT);
+    // helmet
+    r(11, 4, 10, 1, C.steel); r(10, 5, 12, 1, C.steel); r(9, 6, 14, 4, C.steel);
+    r(11, 5, 4, 1, C.steelL); r(10, 6, 2, 2, C.steelL);
+    r(9, 10, 14, 1, C.steelD); r(15, 4, 2, 6, C.steelD);
+    m(10, 8, 1, 1, C.gold);
+    // face
+    r(10, 11, 12, 4, C.skin); r(10, 11, 12, 1, C.skinD);
+    r(15, 10, 2, 4, C.steelD); // nose guard
+    // eyes
+    const e = pose.eyes;
+    if (e === 'closed') { r(11, 13, 2, 1, C.eye); r(19, 13, 2, 1, C.eye); }
+    else if (e === 'happy') { r(11, 13, 1, 1, C.eye); r(12, 12, 1, 1, C.eye); r(13, 13, 1, 1, C.eye); r(19, 13, 1, 1, C.eye); r(20, 12, 1, 1, C.eye); r(21, 13, 1, 1, C.eye); }
+    else if (e === 'look') { r(11, 12, 2, 2, C.white); r(19, 12, 2, 2, C.white); r(12, 12, 1, 2, C.eye); r(20, 12, 1, 2, C.eye); }
+    else if (e === 'wide') { r(11, 11, 2, 3, C.eye); r(19, 11, 2, 3, C.eye); r(11, 11, 1, 1, C.white); r(19, 11, 1, 1, C.white); }
+    else if (e === 'worried') { r(11, 12, 2, 2, C.eye); r(19, 12, 2, 2, C.eye); r(12, 11, 1, 1, C.skinD); r(19, 11, 1, 1, C.skinD); r(11, 11, 1, 1, C.eye); r(20, 11, 1, 1, C.eye); }
+    else { r(11, 12, 2, 2, C.eye); r(19, 12, 2, 2, C.eye); r(11, 12, 1, 1, C.white); r(19, 12, 1, 1, C.white); }
+    if (pose.blush) { r(10, 14, 2, 1, C.blush); r(20, 14, 2, 1, C.blush); }
+    // shoulders (fur)
+    m(5, 17, 5, 4, C.fur); m(6, 17, 3, 1, C.furL);
+    // torso
+    r(9, 19, 14, 7, C.mail); r(10, 21, 1, 1, C.mailL); r(13, 23, 1, 1, C.mailL); r(19, 21, 1, 1, C.mailL); r(21, 24, 1, 1, C.mailL);
+    r(9, 25, 14, 1, C.mailD);
+    // beard
+    r(9, 15, 14, 5, C.beard); r(10, 20, 12, 2, C.beard); r(12, 22, 8, 1, C.beard);
+    r(10, 15, 3, 1, C.beardL); r(19, 15, 3, 1, C.beardL);
+    r(13, 23, 2, 2, C.beardD); r(17, 23, 2, 2, C.beardD); r(13, 25, 2, 1, C.gold); r(17, 25, 2, 1, C.gold);
+    r(12, 18, 1, 3, C.beardD); r(19, 18, 1, 3, C.beardD);
+    // mouth
+    if (pose.mouth === 'o') r(15, 16, 2, 2, C.eye);
+    else if (pose.mouth === 'smile') { r(13, 16, 1, 1, C.eye); r(14, 17, 4, 1, C.eye); r(18, 16, 1, 1, C.eye); }
+    else if (pose.mouth === 'frown') { r(13, 17, 1, 1, C.eye); r(14, 16, 4, 1, C.eye); r(18, 17, 1, 1, C.eye); }
+    else if (pose.mouth === 'flat') r(14, 16, 4, 1, C.beardD);
+    // belt
+    r(9, 26, 14, 1, C.belt); r(15, 26, 2, 1, C.gold);
+    // legs and boots
+    if (!pose.noLegs) {
+      r(10, 27, 5, 4, C.pants); r(17, 27, 5, 4, C.pants);
+      r(9, 30, 6, 1, C.furL); r(17, 30, 6, 1, C.furL);
+      r(9, 31, 6, 3, C.boot); r(17, 31, 6, 3, C.boot);
+    }
+    // left arm
+    if (pose.armL === 'up') { r(5, 11, 3, 7, C.mail); r(5, 9, 3, 2, C.skin); }
+    else { r(6, 21, 3, 6, C.mail); r(6, 27, 3, 2, C.skin); }
+    // right arm and props
+    const a = pose.armR;
+    if (a === 'up') { r(24, 11, 3, 7, C.mail); r(24, 9, 3, 2, C.skin); }
+    else if (a === 'scroll') {
+      r(23, 20, 3, 5, C.mail); r(23, 25, 3, 2, C.skin);
+      r(25, 19, 7, 8, C.parch); r(25, 19, 7, 1, C.parchD); r(25, 26, 7, 1, C.parchD);
+      r(26, 21, 5, 1, C.ink); r(26, 23, 4, 1, C.ink); r(26, 24, 5, 1, C.ink);
+    }
+    else if (a === 'hammerUp') {
+      r(24, 11, 3, 7, C.mail); r(24, 9, 3, 2, C.skin);
+      r(25, 2, 1, 7, C.wood); r(23, 0, 5, 3, C.steel); r(23, 0, 5, 1, C.steelL);
+    }
+    else if (a === 'hammerDown') {
+      r(23, 20, 3, 5, C.mail); r(23, 25, 3, 2, C.skin);
+      r(26, 25, 4, 1, C.wood); r(29, 23, 3, 4, C.steel); r(29, 23, 3, 1, C.steelL);
+    }
+    else if (a === 'ear') { r(23, 14, 3, 6, C.mail); r(22, 12, 3, 2, C.skin); }
+    else { r(23, 21, 3, 6, C.mail); r(23, 27, 3, 2, C.skin); }
+    // anvil
+    if (pose.anvil) { r(27, 29, 8, 2, C.steelD); r(27, 29, 8, 1, C.steel); r(29, 31, 4, 1, C.steelD); r(28, 32, 6, 2, C.steelD); }
+  }
+
+  // Centaur: the Nord's upper body on a horse made of Claude-orange light (the AI half).
+  const HC = { b: '#d97757', l: '#f3a27c', d: '#a8533a', g: '#ffe0c9', hoof: '#3a2a26' };
+  function horse(r, pose) {
+    const L = pose.lie ? 3 : 0, t = pose.t || 0, f = Math.floor(t * 6) % 3;
+    // tail of light
+    r(2, 23 + L, 3, 2, f === 0 ? HC.g : HC.l); r(1, 25 + L, 3, 3, HC.l); r(2, 28 + L, 2, 2, f === 1 ? HC.g : HC.b); r(0, 24 + L, 1, 1, f === 2 ? HC.g : HC.l);
+    // barrel, rounded rump and chest
+    r(6, 23 + L, 29, 8, HC.b); r(5, 24 + L, 1, 6, HC.b); r(35, 24 + L, 1, 6, HC.b);
+    r(7, 23 + L, 24, 1, HC.l); r(6, 24 + L, 3, 1, HC.l); r(7, 30 + L, 27, 1, HC.d);
+    // circuit seams and a pulse of light running along the back
+    r(9, 27 + L, 6, 1, HC.d); r(14, 26 + L, 1, 2, HC.d); r(18, 28 + L, 6, 1, HC.d); r(23, 27 + L, 1, 1, HC.d);
+    r(7 + Math.floor(t * 14) % 24, 24 + L, 2, 1, HC.g);
+    if (pose.lie) { r(7, 34, 8, 2, HC.d); r(25, 34, 9, 2, HC.d); return; }
+    const s = pose.step || 0;
+    const leg = (x, lift) => { r(x, 31, 3, 6 - lift, HC.b); r(x, 31, 1, 6 - lift, HC.l); r(x, 37 - lift, 3, 1, HC.hoof); };
+    leg(7, s ? 1 : 0); leg(12, s ? 0 : 1); leg(27, s ? 0 : 1); leg(31, s ? 1 : 0);
+  }
+  function centaur(r, pose) {
+    const L = pose.lie ? 3 : 0;
+    horse(r, pose);
+    nord((x, y, w, h, c) => r(x + 12, y + L, w, h, c), { ...pose, noLegs: true });
+  }
+  let character = 'centaur';
+  const FIG = {
+    centaur: { draw: centaur, hx: 12, rows: 38, x: 262, detailX: 24 },
+    nord: { draw: nord, hx: 0, rows: 34, x: 304, detailX: 40 },
+  };
+
+  function drawNord(ox, oy, U, pose, alpha) {
+    const nord = FIG[character].draw;
+    ctx.globalAlpha = alpha;
+    const outline = (x, y, w, h) => {
+      ctx.fillRect(ox + (x - 1) * U, oy + y * U, (w + 2) * U, h * U);
+      ctx.fillRect(ox + x * U, oy + (y - 1) * U, w * U, (h + 2) * U);
+    };
+    ctx.fillStyle = '#0b0a10';
+    nord((x, y, w, h) => outline(x, y, w, h), pose);
+    nord((x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x * U, oy + y * U, w * U, h * U); }, pose);
+    ctx.globalAlpha = 1;
+  }
+
+  function poseFor(state, t) {
+    const p = basePose(state, t);
+    p.t = t;
+    p.lie = character === 'centaur' && state === 'sleeping';
+    p.step = state === 'working' ? Math.floor(t * 8) % 2 : (state === 'happy' || state === 'waiting') ? Math.floor(t * 4) % 2 : 0;
+    return p;
+  }
+  function basePose(state, t) {
+    const tn = now();
+    if (tn > nextBlink) { blinkAt = tn; nextBlink = tn + 2 + Math.random() * 3.5; }
+    const blinking = tn - blinkAt < 0.14;
+    const open = e => (blinking ? 'closed' : e);
+    const beat = Math.floor(t * 5) % 2;
+    switch (state) {
+      case 'sleeping':  return { eyes: 'closed', mouth: 'o', bob: Math.floor(t * 1.2) % 2 };
+      case 'thinking':  return { eyes: open('look'), mouth: 'flat', armR: 'scroll', bob: 0 };
+      case 'working':   return { eyes: open('open'), mouth: 'flat', armR: beat ? 'hammerUp' : 'hammerDown', anvil: true, bob: beat ? 0 : 1, hit: !beat };
+      case 'waiting':   return { eyes: open('wide'), mouth: 'o', armL: 'up', bob: Math.floor(t * 4) % 2 };
+      case 'happy':     return { eyes: 'happy', mouth: 'smile', blush: true, armL: 'up', armR: 'up', bob: Math.floor(t * 6) % 2 ? -1 : 0 };
+      case 'worried':   return { eyes: open('worried'), mouth: 'frown', bob: 0, shake: Math.floor(t * 14) % 2 };
+      case 'listening': return { eyes: open('wide'), mouth: 'o', armR: 'ear', bob: 0 };
+    }
+    return { eyes: 'open', bob: 0 };
+  }
+
+  // ---------- Scene ----------
+  const STARS = Array.from({ length: 40 }, (_, i) => ({ x: (i * 97) % 790 + 5, y: (i * 53) % 230 + 60, p: i * 1.7 }));
+
+  function drawSky(t, state) {
+    const bands = ['#0f1220', '#121628', '#151a2f', '#191f37', '#1c233d'];
+    const top = 56, h = 270;
+    bands.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(0, top + (h / bands.length) * i, W, h / bands.length + 1); });
+    STARS.forEach(s => {
+      const tw = (Math.sin(t * 2 + s.p) + 1) / 2;
+      ctx.fillStyle = tw > 0.7 ? '#e8ecff' : '#7c86a8';
+      ctx.fillRect(s.x, s.y, tw > 0.85 ? 4 : 2, tw > 0.85 ? 4 : 2);
+    });
+    // mountains
+    ctx.fillStyle = '#232a44';
+    for (let x = 0; x < W; x += 8) {
+      const y = 250 + Math.round((Math.sin(x * 0.012) * 26 + Math.sin(x * 0.031 + 1) * 14) / 4) * 4;
+      ctx.fillRect(x, y, 8, 326 - y);
+    }
+    ctx.fillStyle = '#d6dbea';
+    for (let x = 0; x < W; x += 8) {
+      const y = 250 + Math.round((Math.sin(x * 0.012) * 26 + Math.sin(x * 0.031 + 1) * 14) / 4) * 4;
+      if (y < 232 && (x < 260 || x > 540)) ctx.fillRect(x, y, 8, 4);
+    }
+    // aura behind the hero, in the state's colour
+    const g = ctx.createRadialGradient(400, 250, 10, 400, 250, 190);
+    g.addColorStop(0, STATES[state].color + '38'); g.addColorStop(1, STATES[state].color + '00');
+    ctx.fillStyle = g; ctx.fillRect(200, 60, 400, 270);
+    // ground
+    ctx.fillStyle = '#2b3140'; ctx.fillRect(0, 322, W, 16);
+    ctx.fillStyle = '#3d4558'; ctx.fillRect(0, 322, W, 4);
+    for (let x = 0; x < W; x += 48) { ctx.fillStyle = '#353c4e'; ctx.fillRect(x + 12, 330, 20, 4); }
+    for (let x = 6; x < W; x += 36) { ctx.fillStyle = '#3f6b47'; ctx.fillRect(x, 318, 4, 4); ctx.fillRect(x + 4, 314, 4, 4); }
+  }
+
+  function drawFire(cx, base, U, t) {
+    ctx.fillStyle = '#5e3d24'; ctx.fillRect(cx - 4 * U, base - 2 * U, 8 * U, 2 * U);
+    ctx.fillStyle = '#7a5233'; ctx.fillRect(cx - 3 * U, base - 3 * U, 6 * U, U);
+    const f = Math.floor(t * 8) % 3;
+    const flames = [
+      [[-2, 4, 4, '#e0482a'], [-1, 6, 2, '#ff8a3d'], [0, 8, 1, '#ffd25a']],
+      [[-2, 5, 4, '#e0482a'], [-1, 7, 3, '#ff8a3d'], [0, 9, 1, '#ffd25a']],
+      [[-3, 4, 5, '#e0482a'], [-2, 6, 3, '#ff8a3d'], [-1, 7, 2, '#ffd25a']],
+    ][f];
+    flames.forEach(([x, hgt, w, c]) => { ctx.fillStyle = c; ctx.fillRect(cx + x * U, base - (3 + hgt) * U, w * U, hgt * U); });
+    const g = ctx.createRadialGradient(cx, base - 20, 4, cx, base - 20, 120);
+    g.addColorStop(0, 'rgba(255,140,60,.22)'); g.addColorStop(1, 'rgba(255,140,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(cx - 120, base - 140, 240, 160);
+  }
+
+  function pixelText(text, x, y, size, color, align = 'center') {
+    ctx.font = `400 ${size}px ${PIX}`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#0b0a10';
+    [[-2, 0], [2, 0], [0, -2], [0, 2]].forEach(([dx, dy]) => ctx.fillText(text, x + dx, y + dy));
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+    ctx.textAlign = 'left';
+  }
+
+  function drawEffects(state, pose, ox, oy, U, t, dt, alpha) {
+    const hx = FIG[character].hx;
+    const cx = ox + (16 + hx) * U;
+    ctx.globalAlpha = alpha;
+    if (state === 'waiting') {
+      // golden quest marker
+      const y = oy - 5 * U + (Math.floor(t * 3) % 2) * U;
+      const x = cx - U;
+      ctx.fillStyle = '#0b0a10'; ctx.fillRect(x - U, y - U, 4 * U, 7 * U); ctx.fillRect(x - U, y + 6 * U, 4 * U, 4 * U);
+      ctx.fillStyle = '#f6c945'; ctx.fillRect(x, y, 2 * U, 5 * U); ctx.fillRect(x, y + 7 * U, 2 * U, 2 * U);
+      ctx.fillStyle = '#fff1a8'; ctx.fillRect(x, y, U, 2 * U);
+    }
+    if (state === 'worried') {
+      // low health bar
+      const bw = 16 * U, x = cx - bw / 2, y = oy - U * 2;
+      ctx.fillStyle = '#0b0a10'; ctx.fillRect(x - 4, y - 4, bw + 8, 2 * U + 8);
+      ctx.fillStyle = '#3a1a22'; ctx.fillRect(x, y, bw, 2 * U);
+      ctx.fillStyle = Math.floor(t * 4) % 2 ? '#ff6464' : '#b83a3a'; ctx.fillRect(x, y, bw * 0.2, 2 * U);
+      pixelText('PV 2/10', cx, y - 10, 18, '#ffb0b0');
+      // sweat drop
+      const d = Math.floor((t * 6) % 4);
+      ctx.fillStyle = '#8fd0ff'; ctx.fillRect(ox + (23 + hx) * U, oy + (9 + d) * U, U, 2 * U);
+    }
+    if (state === 'thinking' && !reduceMotion) {
+      const n = Math.floor(t * 3) % 4;
+      for (let i = 0; i < n; i++) { ctx.fillStyle = '#d8d0ff'; ctx.fillRect(cx + 6 * U + i * 3 * U, oy, 2 * U, 2 * U); }
+    }
+    if (state === 'listening') {
+      const n = Math.floor(t * 5) % 4;
+      for (let i = 1; i <= n; i++) {
+        ctx.fillStyle = '#62d0f5';
+        ctx.fillRect(ox + (26 + hx + i * 3) * U, oy + (11 - i) * U, U, (2 + 2 * i) * U);
+      }
+    }
+    if (state === 'sleeping') drawFire(ox - 6 * U, oy + 34 * U, U, t);
+    ctx.globalAlpha = 1;
+
+    // particles
+    if (!reduceMotion) {
+      if (state === 'working' && pose.hit && Math.random() < dt * 40) {
+        particles.push({ x: ox + (30 + hx) * U, y: oy + 28 * U, vx: (Math.random() - .3) * 160, vy: -80 - Math.random() * 120, life: .5, max: .5, c: Math.random() < .5 ? '#ffd25a' : '#ff8a3d', g: 400 });
+      }
+      if (state === 'happy' && Math.random() < dt * 12) {
+        particles.push({ x: cx + (Math.random() - .5) * 260, y: oy + 30 * U, vx: 0, vy: -60 - Math.random() * 40, life: 1.6, max: 1.6, c: ['#7ddc8f', '#f6c945', '#fff1a8'][Math.floor(Math.random() * 3)], g: 0, plus: true });
+      }
+      if (state === 'sleeping' && Math.random() < dt * 0.8) {
+        particles.push({ x: cx + 6 * U, y: oy + 6 * U, vx: 18, vy: -24, life: 3, max: 3, z: true });
+      }
+    }
+    particles = particles.filter(p => (p.life -= dt) > 0);
+    for (const p of particles) {
+      p.vy += (p.g || 0) * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      ctx.globalAlpha = alpha * Math.min(1, p.life / p.max * 2);
+      const x = snap(p.x, 4), y = snap(p.y, 4);
+      if (p.z) pixelText('z', x, y, Math.round(20 + (1 - p.life / p.max) * 14), '#b9c4e0');
+      else if (p.plus) { ctx.fillStyle = p.c; ctx.fillRect(x - 6, y - 2, 12, 4); ctx.fillRect(x - 2, y - 6, 4, 12); }
+      else { ctx.fillStyle = p.c; ctx.fillRect(x, y, 4, 4); }
+    }
+    ctx.globalAlpha = 1;
+    if (state === 'happy') {
+      const k = (t * 0.7) % 1;
+      ctx.globalAlpha = alpha * (1 - k);
+      pixelText('+50 XP', cx + 8 * U, oy + 4 * U - k * 40, 24, '#f6c945');
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- The forge: each step of a task is one piece of an item ----------
+  const ITEM_COLORS = {
+    S: '#a3acb7', s: '#5f6873', L: '#dde3e9', G: '#f2c14e', g: '#b8892a', R: '#d94a4a',
+    B: '#7a4a2a', b: '#4e2f1a', W: '#8a5a33', w: '#6a4325', P: '#efe0b8', p: '#c9b27f',
+    K: '#7fd3ff', O: '#d97757',
+  };
+  const ITEMS = {
+    espada: [
+      '.....LS.....', '....LSSs....', '....LSSs....', '....LSSs....', '....LSSs....', '....LSSs....',
+      '....LSSs....', '....LSSs....', '....LSSs....', '....LSSs....', '....LSSs....', '....LSSs....',
+      '....LSSs....', '....LSSs....', '....LSSs....', '....LSSs....', '.gGGGGGGGGg.', 'ggGGGRRGGGgg',
+      '.gGGGGGGGGg.', '.....Bb.....', '.....Bb.....', '.....bB.....', '.....Bb.....', '.....bB.....',
+      '.....Bb.....', '....gGGg....', '....GRRG....', '.....gg.....',
+    ],
+    escudo: [
+      '.ssssssssss.', 'sSSSSSSSSSSs', 'sSOOOOOOOOSs', 'sSOOOOOOOOSs', 'sSOOOGGOOOSs', 'sSOOGGGGOOSs',
+      'sSOOOGGOOOSs', 'sSOOOOOOOOSs', 'sSOOOOOOOOSs', 'sSOOOOOOOOSs', '.sSOOOOOOSs.', '.sSOOOOOOSs.',
+      '..sSOOOOSs..', '..sSOOOOSs..', '...sSOOSs...', '....sSSs....', '.....ss.....',
+    ],
+    tomo: [
+      '.bbbbbbbbbb.', 'bBBBBBBBBBPb', 'bBGGGGGGBBPb', 'bBGBBBBGBBPb', 'bBGBOOBGBBPb', 'bBGBOOBGBBPb',
+      'bBGBBBBGBBPb', 'bBGGGGGGBBPb', 'bBBBBBBBBBPb', 'bBBBGGBBBBPb', 'bBBBBBBBBBPb', 'bBBBBBBBBBPb',
+      'bbbbbbbbbbpb', '.pppppppppp.',
+    ],
+    catalejo: [
+      '....gGGg....', '....GKKG....', '....gGGg....', '....BBBB....', '....BbbB....', '....BBBB....',
+      '....gGGg....', '.....SS.....', '.....Ss.....', '.....SS.....', '.....gg.....', '.....WW.....',
+      '.....Ww.....', '.....WW.....', '.....Ww.....', '.....WW.....', '....gGGg....', '...GG..GG...',
+      '..GG....GG..', '.GG......GG.',
+    ],
+  };
+  function forgeInfo(p) {
+    const f = p.forja;
+    if (!f || !Array.isArray(f.piezas) || !f.piezas.length) return null;
+    const total = f.piezas.length;
+    const done = f.piezas.filter(x => x.hecha).length;
+    const cur = f.piezas.findIndex(x => !x.hecha);
+    return { f, total, done, cur, item: ITEMS[f.objeto] || ITEMS.espada };
+  }
+  // Draws the item with its bottom-left at (x, bottom). Finished pieces in colour, the
+  // piece being forged glowing hot, the rest as a faint ghost.
+  function drawForge(x, bottom, scale, p, t, state) {
+    const info = forgeInfo(p);
+    if (!info) return;
+    const { item, total, cur } = info;
+    const rows = item.length, top = bottom - rows * scale;
+    const hot = state === 'working';
+    const allDone = cur === -1;
+    if (allDone) {
+      const g = ctx.createRadialGradient(x + 6 * scale, top + rows * scale / 2, 4, x + 6 * scale, top + rows * scale / 2, rows * scale);
+      g.addColorStop(0, 'rgba(255,230,140,.35)'); g.addColorStop(1, 'rgba(255,230,140,0)');
+      ctx.fillStyle = g; ctx.fillRect(x - rows * scale, top - rows * scale / 2, rows * scale * 2 + 12 * scale, rows * scale * 2);
+    }
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fillRect(x + 2 * scale, bottom, 8 * scale, Math.max(2, scale));
+    for (let r = 0; r < rows; r++) {
+      const piece = Math.min(total - 1, Math.floor((rows - 1 - r) * total / rows));
+      const state_ = allDone || piece < cur ? 'done' : piece === cur ? 'cur' : 'todo';
+      for (let c = 0; c < 12; c++) {
+        const ch = item[r][c];
+        if (ch === '.') continue;
+        let col = ITEM_COLORS[ch];
+        if (state_ === 'todo') col = 'rgba(255,255,255,.2)';
+        else if (state_ === 'cur') col = hot ? ((Math.floor(t * 6) + r + c) % 3 === 0 ? '#ffd25a' : '#ff8a3d') : 'rgba(255,170,90,.55)';
+        ctx.fillStyle = col;
+        ctx.fillRect(x + c * scale, top + r * scale, scale, scale);
+      }
+    }
+    if (allDone && Math.floor(t * 4) % 2) {
+      ctx.fillStyle = '#fff6c8';
+      ctx.fillRect(x + 10 * scale, top + scale, scale, scale * 3); ctx.fillRect(x + 9 * scale, top + 2 * scale, scale * 3, scale);
+    }
+  }
+
+  // ---------- Screen parts ----------
+  function drawTopBar(t) {
+    ctx.fillStyle = '#0d0f17'; ctx.fillRect(0, 0, W, 56);
+    ctx.fillStyle = '#e9dcc0'; ctx.fillRect(0, 52, W, 4);
+    const x0 = 28;
+    projects.forEach((p, i) => {
+      const c = STATES[p.state].color;
+      const on = p.state === 'waiting' ? Math.floor(t * 3) % 2 : 1;
+      const x = x0 + i * 28;
+      if (i === idx) { ctx.fillStyle = '#fff6e0'; ctx.fillRect(x - 4, 18, 20, 20); ctx.fillStyle = '#0d0f17'; ctx.fillRect(x - 2, 20, 16, 16); }
+      ctx.globalAlpha = on ? 1 : 0.35;
+      ctx.fillStyle = c; ctx.fillRect(x, 22, 12, 12);
+      ctx.fillStyle = '#ffffff55'; ctx.fillRect(x, 22, 4, 4);
+      ctx.globalAlpha = 1;
+    });
+    const others = projects.filter((p, i) => i !== idx && p.state === 'waiting').length;
+    if (others && view === 'pet') {
+      const txt = others === 1 ? '¡Otra misión te espera!' : `¡${others} misiones te esperan!`;
+      ctx.font = `400 18px ${PIX}`;
+      const w = ctx.measureText(txt).width + 28;
+      ctx.fillStyle = '#f6c945'; ctx.fillRect(400 - w / 2, 14, w, 28);
+      ctx.fillStyle = '#2a1d05'; ctx.textAlign = 'center'; ctx.fillText(txt, 400, 34); ctx.textAlign = 'left';
+    }
+    const d = new Date();
+    ctx.font = `400 26px ${TXT}`; ctx.textAlign = 'right'; ctx.fillStyle = '#e9dcc0';
+    ctx.fillText(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, 714, 36);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e9dcc0'; ctx.fillRect(726, 20, 44, 18); ctx.fillRect(770, 25, 4, 8);
+    ctx.fillStyle = '#0d0f17'; ctx.fillRect(729, 23, 38, 12);
+    ctx.fillStyle = '#7ddc8f'; [0, 1, 2].forEach(i => ctx.fillRect(731 + i * 12, 25, 10, 8));
+  }
+
+  function stateTag(x, y, state) {
+    const s = STATES[state];
+    ctx.font = `400 18px ${PIX}`;
+    const txt = s.label.toUpperCase();
+    const w = ctx.measureText(txt).width + 30;
+    ctx.fillStyle = s.color; ctx.fillRect(x, y - 18, w, 24);
+    ctx.fillStyle = '#0d0f17'; ctx.fillRect(x + 6, y - 10, 8, 8);
+    ctx.fillStyle = '#14100a'; ctx.fillText(txt, x + 20, y);
+    return w;
+  }
+
+  function dialog(x, y, w, h) { box(x, y, w, h, '#141827'); }
+
+  function drawPetView(t, dt, sx, alpha) {
+    const p = projects[idx];
+    const state = currentState();
+    const pose = poseFor(state, t);
+    const U = 6;
+    const fig = FIG[character];
+    const ox = snap(fig.x + sx + (pose.shake ? U : 0), 2), oy = 322 - fig.rows * U + (pose.bob || 0) * U;
+    drawSky(t, state);
+    drawNord(ox, oy, U, pose, alpha);
+    drawEffects(state, pose, ox, oy, U, t, dt, alpha);
+    const fi = forgeInfo(p);
+    if (fi) {
+      ctx.globalAlpha = alpha;
+      drawForge(640 + sx, 318, 5, p, t, state);
+      pixelText(`${fi.done}/${fi.total}`, 670 + sx, 318 - fi.item.length * 5 - 12, 24, fi.cur === -1 ? '#fff1a8' : '#ffb07a');
+      ctx.globalAlpha = 1;
+    }
+
+    // dialog box
+    dialog(20, 342, 760, 128);
+    ctx.globalAlpha = alpha;
+    if (listening) {
+      pixelText('Te escucho…', 400, 392, 26, '#62d0f5');
+      for (let i = 0; i < 28; i++) {
+        const hgt = 4 + 4 * Math.round(5 * Math.abs(Math.sin(t * 8 + i * 0.7)) * (0.4 + 0.6 * Math.abs(Math.sin(t * 2.3 + i * 0.2))));
+        ctx.fillStyle = '#62d0f5'; ctx.fillRect(400 - 28 * 7 + i * 14, 432 - hgt / 2, 8, hgt);
+      }
+    } else if (answer && now() < answer.until) {
+      if (now() < answer.thinkUntil) pixelText('…', 400, 412, 32, '#d8d0ff');
+      else {
+        const shown = Math.floor((now() - answer.thinkUntil) * 45);
+        const text = answer.text.slice(0, shown);
+        const lines = wrap(text, 700, `400 28px ${TXT}`).slice(0, 3);
+        ctx.fillStyle = '#f4ecd8'; ctx.font = `400 28px ${TXT}`;
+        lines.forEach((ln, i) => ctx.fillText(ln, 46, 384 + i * 28));
+      }
+    } else {
+      // name tab
+      ctx.font = `400 22px ${PIX}`;
+      const nw = ctx.measureText(p.name).width + 32;
+      box(36 + sx, 324, nw, 36, '#2a2238');
+      ctx.fillStyle = '#fff6e0'; ctx.fillText(p.name, 52 + sx, 350);
+      const tw = stateTag(46 + sx, 394, p.state);
+      ctx.fillStyle = '#8f8a99'; ctx.font = `400 22px ${TXT}`; ctx.textAlign = 'right';
+      ctx.fillText(ago(now() - p.since), 756, 392); ctx.textAlign = 'left';
+      const lines = wrap(p.status, 700, `400 30px ${TXT}`).slice(0, 2);
+      ctx.fillStyle = p.state === 'waiting' ? '#ffe28a' : '#f4ecd8'; ctx.font = `400 30px ${TXT}`;
+      ctx.fillText(lines[0], 46 + sx, 432);
+      if (lines[1]) ctx.fillText(lines[1], 46 + sx, 458);
+      if (p.state === 'waiting' && Math.floor(t * 2.5) % 2) {
+        ctx.fillStyle = '#f6c945';
+        ctx.fillRect(744, 444, 16, 4); ctx.fillRect(748, 448, 8, 4); ctx.fillRect(750, 452, 4, 4);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawDetailView(t, dt, sx, alpha) {
+    const p = projects[idx];
+    const state = currentState();
+    const pose = poseFor(state, t);
+    const U = 4;
+    drawSky(t, state);
+    const fig = FIG[character];
+    const ox = fig.detailX + sx, oy = 322 - fig.rows * U + (pose.bob || 0) * U;
+    drawNord(ox, oy, U, pose, alpha);
+    drawEffects(state, pose, ox, oy, U, t, dt, alpha);
+
+    ctx.globalAlpha = alpha;
+    box(220 + sx, 68, 560, 262, '#efe0b8', '#e9dcc0', '#8a6a4a');
+    ctx.fillStyle = '#3a2a18'; ctx.font = `400 26px ${PIX}`;
+    ctx.fillText(p.name, 244 + sx, 106);
+    stateTag(244 + sx, 138, p.state);
+    ctx.fillStyle = '#8a6a4a'; ctx.font = `400 15px ${PIX}`;
+    ctx.fillText(p.state === 'waiting' ? 'CLAUDE TE PREGUNTA' : 'MISIÓN ACTUAL', 244 + sx, 170);
+    const lines = wrap(p.status, 510, `400 26px ${TXT}`).slice(0, 2);
+    ctx.fillStyle = p.state === 'waiting' ? '#a2420f' : '#2c2116'; ctx.font = `400 26px ${TXT}`;
+    lines.forEach((ln, i) => ctx.fillText(ln, 244 + sx, 194 + i * 24));
+    ctx.fillStyle = '#8a6a4a'; ctx.font = `400 15px ${PIX}`;
+    const fi = forgeInfo(p);
+    if (fi) {
+      ctx.fillText(`FORJA · ${(fi.f.nombre || fi.f.objeto || '').toUpperCase()} · ${fi.done}/${fi.total}`, 244 + sx, 240);
+      fi.f.piezas.slice(0, 6).forEach((pc, i) => {
+        const col = i % 2, row = Math.floor(i / 2);
+        const x = 244 + sx + col * 262, y = 264 + row * 22;
+        const mark = pc.hecha ? '✓' : i === fi.cur ? '►' : '·';
+        ctx.fillStyle = pc.hecha ? '#2f6b3a' : i === fi.cur ? '#a2420f' : '#8a7a62'; ctx.font = `400 22px ${TXT}`;
+        let txt = `${mark} ${pc.nombre || 'Pieza ' + (i + 1)}`;
+        while (txt.length > 3 && ctx.measureText(txt).width > 250) txt = txt.slice(0, -2) + '…';
+        ctx.fillText(txt, x, y);
+      });
+    } else {
+      ctx.fillText('DIARIO', 244 + sx, 240);
+      p.log.slice(-3).reverse().forEach((e, i) => {
+        const y = 264 + i * 22;
+        ctx.fillStyle = i === 0 ? '#2c2116' : '#6e5a42'; ctx.font = `400 22px ${TXT}`;
+        ctx.fillText('· ' + wrap(e.text, 380, ctx.font)[0], 244 + sx, y);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#8a6a4a'; ctx.fillText(ago(now() - e.at), 760 + sx, y); ctx.textAlign = 'left';
+      });
+    }
+    dialog(20, 342, 760, 128);
+    ctx.fillStyle = '#f4ecd8'; ctx.font = `400 26px ${TXT}`;
+    const hint = p.state === 'waiting' ? ['Mantén el botón para contestar con la voz.', 'Pulsa la rueda para volver.'] : ['Gira la rueda para ver otra misión.', 'Pulsa la rueda para volver.'];
+    hint.forEach((h, i) => ctx.fillText(h, 46, 394 + i * 30));
+    ctx.globalAlpha = 1;
+  }
+
+  let last = now();
+  function frame() {
+    const t = now(); const dt = Math.min(0.05, t - last); last = t;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d0f17'; ctx.fillRect(0, 0, W, H);
+    const pr = reduceMotion ? 1 : (t - slide.at) / 0.3;
+    const sx = snap(slide.dir * 160 * (1 - ease(pr)), 4);
+    const alpha = 0.3 + 0.7 * ease(pr);
+    if (view === 'pet') drawPetView(t, dt, sx, alpha); else drawDetailView(t, dt, sx, alpha);
+    drawTopBar(t);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Input ----------
+  function rotate(dir) {
+    ensureAudio();
+    if (listening) return;
+    idx = (idx + dir + projects.length) % projects.length;
+    slide = { dir, at: now() };
+    answer = null; particles = [];
+    syncPanel();
+  }
+  function press() {
+    ensureAudio();
+    if (listening) return;
+    if (answer) { answer = null; return; }
+    view = view === 'pet' ? 'detail' : 'pet';
+    slide = { dir: 0, at: now() }; particles = [];
+  }
+  function back() { view = 'pet'; answer = null; }
+
+  const wheel = document.getElementById('wheel');
+  const pttBtn = document.getElementById('ptt');
+  function startTalk() {
+    ensureAudio();
+    if (listening) return;
+    listening = true; listenStart = now(); answer = null; particles = [];
+    pttBtn.classList.add('down');
+  }
+  function endTalk() {
+    if (!listening) return;
+    listening = false; pttBtn.classList.remove('down');
+    if (now() - listenStart < 0.35) return;
+    const p = projects[idx];
+    const waitingOnes = projects.filter(q => q.state === 'waiting');
+    let text;
+    if (p.state === 'waiting') text = `¡A tus órdenes! Le digo a Claude que sí a «${p.status}». (Simulado)`;
+    else if (waitingOnes.length) text = `${p.name}: ${p.status.toLowerCase()}. Pero ${waitingOnes.map(q => q.name).join(' y ')} reclama tu ayuda.`;
+    else text = `${p.name}: ${p.status.toLowerCase()}. El resto del reino está en calma.`;
+    answer = { text, thinkUntil: now() + 1.0, until: now() + 9 };
+    if (p.state === 'waiting') setTimeout(() => setState(p, 'working'), 1200);
+  }
+
+  let wheelAcc = 0, wheelPos = 0;
+  function spinVisual(delta) {
+    wheelPos += delta;
+    const vertical = getComputedStyle(wheel).cursor === 'ns-resize';
+    wheel.style.backgroundPosition = vertical ? `0 0, 0 ${wheelPos}px` : `0 0, ${wheelPos}px 0`;
+  }
+  wheel.addEventListener('wheel', e => {
+    e.preventDefault();
+    wheelAcc += e.deltaY; spinVisual(-e.deltaY * 0.2);
+    if (Math.abs(wheelAcc) > 60) { rotate(wheelAcc > 0 ? 1 : -1); wheelAcc = 0; }
+  }, { passive: false });
+  let drag = null;
+  wheel.addEventListener('pointerdown', e => {
+    wheel.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, y: e.clientY, acc: 0, moved: false };
+    wheel.classList.add('pressed');
+  });
+  wheel.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const vertical = getComputedStyle(wheel).cursor === 'ns-resize';
+    const d = vertical ? e.clientY - drag.y : e.clientX - drag.x;
+    drag.x = e.clientX; drag.y = e.clientY;
+    drag.acc += d; spinVisual(d);
+    if (Math.abs(drag.acc) > 6) drag.moved = true;
+    if (Math.abs(drag.acc) > 34) { rotate(drag.acc > 0 ? 1 : -1); drag.acc = 0; }
+  });
+  wheel.addEventListener('pointerup', () => {
+    if (!drag) return;
+    wheel.classList.remove('pressed');
+    if (!drag.moved) press();
+    drag = null;
+  });
+  wheel.addEventListener('pointercancel', () => { drag = null; wheel.classList.remove('pressed'); });
+  wheel.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); if (e.key === 'Enter') press(); } });
+
+  pttBtn.addEventListener('pointerdown', e => { pttBtn.setPointerCapture(e.pointerId); startTalk(); });
+  pttBtn.addEventListener('pointerup', endTalk);
+  pttBtn.addEventListener('pointercancel', endTalk);
+  pttBtn.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); e.stopPropagation(); startTalk(); } });
+  pttBtn.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); endTalk(); } });
+
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('input, select, textarea')) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); rotate(1); spinVisual(12); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); rotate(-1); spinVisual(-12); }
+    else if (e.key === 'Enter' && !e.target.closest('button')) { e.preventDefault(); press(); }
+    else if (e.key === 'Escape') back();
+    else if (e.key === ' ' && !e.repeat && !e.target.closest('button')) { e.preventDefault(); startTalk(); }
+  });
+  document.addEventListener('keyup', e => { if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); endTalk(); } });
+
+  // ---------- Panel ----------
+  const seg = document.getElementById('seg');
+  const curName = document.getElementById('curName');
+  PICKABLE.forEach(s => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.state = s;
+    b.innerHTML = `<span class="dot" style="background:${STATES[s].color}"></span><span><b>${STATES[s].label}</b><small>${STATES[s].meaning}</small></span>`;
+    b.addEventListener('click', () => { ensureAudio(); setState(projects[idx], s); });
+    seg.appendChild(b);
+  });
+  function syncPanel() {
+    curName.textContent = projects[idx].name;
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === projects[idx].state)));
+  }
+  syncPanel();
+  document.querySelectorAll('#chars button').forEach(b => b.addEventListener('click', () => {
+    character = b.dataset.char; particles = [];
+    document.querySelectorAll('#chars button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  soundBox.addEventListener('change', () => { ensureAudio(); if (soundBox.checked) chirp('happy'); });
+
+  // ---------- Demo ----------
+  const NEXT = {
+    sleeping: ['thinking'],
+    thinking: ['working', 'working', 'waiting'],
+    working: ['working', 'happy', 'waiting', 'worried', 'thinking'],
+    waiting: ['working'],
+    happy: ['sleeping', 'thinking'],
+    worried: ['thinking', 'working'],
+  };
+  const autoBox = document.getElementById('auto');
+  setInterval(() => {
+    if (!autoBox.checked || listening) return;
+    const candidates = projects.filter(p => !(p.state === 'waiting' && now() - p.since < 25));
+    if (!candidates.length) return;
+    const p = candidates[Math.floor(Math.random() * candidates.length)];
+    const opts = NEXT[p.state];
+    setState(p, opts[Math.floor(Math.random() * opts.length)]);
+  }, 4500);
+
+  const start = () => requestAnimationFrame(frame);
+  if (document.fonts && document.fonts.load) {
+    Promise.all([document.fonts.load(`400 22px "Tiny5"`), document.fonts.load(`400 28px "VT323"`)]).finally(start);
+  } else start();
+})();
+</script>
