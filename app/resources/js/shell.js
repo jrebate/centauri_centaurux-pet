@@ -15,33 +15,43 @@
     Neutralino.window.setDraggableRegion(canvas, { dragMinDistance: 6 }).catch(() => {});
   }
 
-  // ---- Mouse: scroll = wheel, click = open/press, hold = talk, drag = move ----
+  // ---- Mouse: scroll = change mission, click = open/press or a button, drag = move ----
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     wheel.dispatchEvent(new WheelEvent('wheel', { deltaY: e.deltaY * 3, cancelable: true }));
   }, { passive: false });
 
-  let holdTimer = null, talking = false, down = null, dragged = false;
+  let talking = false, down = null, dragged = false;  // talking: Space only (the prototype handles it)
   canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     hideMenu();
     M.walk.on = false;
     down = { x: e.screenX, y: e.screenY }; dragged = false;
-    holdTimer = setTimeout(() => { if (!dragged) { talking = true; M.startTalk(); } }, 450);
   });
+  function clickable(x, y) {
+    return (M.petMode && M.hitAccept(x, y)) || M.hitMarker(x, y) >= 0 || M.hitBack(x, y);
+  }
   window.addEventListener('pointermove', e => {
-    if (down && Math.hypot(e.screenX - down.x, e.screenY - down.y) > 5) { dragged = true; clearTimeout(holdTimer); }
+    if (down && Math.hypot(e.screenX - down.x, e.screenY - down.y) > 5) dragged = true;
+    if (!down) canvas.style.cursor = clickable(e.clientX, e.clientY) ? 'pointer' : 'grab';
   });
   window.addEventListener('pointerup', e => {
     if (e.button !== 0 || !down) return;
-    clearTimeout(holdTimer);
-    if (talking) { talking = false; M.endTalk(); }
-    else if (dragged) walkOffset = 0;
-    else if (M.petMode && M.hitAccept(e.clientX, e.clientY)) acceptReward(M.hitAccept(e.clientX, e.clientY));
+    const x = e.clientX, y = e.clientY;
+    if (dragged) walkOffset = 0;
+    else if (M.petMode && M.hitAccept(x, y)) M.accept(M.hitAccept(x, y));
+    else if (M.hitMarker(x, y) >= 0) M.select(M.hitMarker(x, y));
+    else if (M.hitBack(x, y)) setBig(false);
     else if (M.petMode) setBig(true);
     else M.press();
     down = null;
   });
+  // Pet mode: Enter collects a finished mission's reward, or else opens the big screen
+  window.addEventListener('keydown', e => {
+    if (!M.petMode || e.key !== 'Enter') return;
+    e.preventDefault(); e.stopPropagation();
+    if (M.state === 'happy') M.press(); else setBig(true);
+  }, true);
 
   async function setBig(on) {
     M.setPetMode(!on);
@@ -52,6 +62,9 @@
   // ---- Right-click menu ----
   let walkEnabled = true;
   function syncMenu() {
+    const n = M.rewards;
+    menu.querySelector('[data-act="rewards"]').hidden = !n;
+    menu.querySelector('[data-act="rewards"]').textContent = n === 1 ? 'Recoger la recompensa' : `Recoger las ${n} recompensas`;
     menu.querySelector('[data-act="big"]').hidden = !M.petMode;
     menu.querySelector('[data-act="pet"]').hidden = M.petMode;
     menu.querySelector('[data-act="walk"]').textContent = `Pasear: ${walkEnabled ? 'sí' : 'no'}`;
@@ -73,7 +86,8 @@
     const b = e.target.closest('button'); if (!b) return;
     const act = b.dataset.act;
     hideMenu();
-    if (act === 'big') setBig(true);
+    if (act === 'rewards') M.acceptAll();
+    else if (act === 'big') setBig(true);
     else if (act === 'pet') setBig(false);
     else if (act === 'walk') { walkEnabled = !walkEnabled; M.walk.on = false; }
     else if (act === 'demo') { autoBox.checked = !autoBox.checked; }
@@ -129,16 +143,19 @@
   }
   poll(); setInterval(poll, 5000);
 
-  // ---- "Aceptar recompensa": puts a finished mission to sleep, in the pet and in estado.json ----
-  async function acceptReward(name) {
-    M.accept(name);
+  // ---- Collected rewards: the pet already shows them asleep; save that in estado.json too ----
+  window.__onAccept = async names => {
     if (!inNeu || !activePath) return;
     try {
       const data = JSON.parse((await Neutralino.filesystem.readFile(activePath)).replace(/^\uFEFF/, ''));
-      const p = (data.projects || []).find(x => x.name === name);
-      if (!p || p.state !== 'happy') return;
-      Object.assign(p, { state: 'sleeping', status: 'Recompensa recogida', updatedAt: new Date().toISOString() });
-      await Neutralino.filesystem.writeFile(activePath, JSON.stringify(data, null, 1));
-    } catch (e) { /* the pet already shows it asleep; the file catches up on the next update */ }
-  }
+      let changed = false;
+      (data.projects || []).forEach(p => {
+        if (names.includes(p.name) && p.state === 'happy') {
+          Object.assign(p, { state: 'sleeping', status: 'Recompensa recogida', updatedAt: new Date().toISOString() });
+          changed = true;
+        }
+      });
+      if (changed) await Neutralino.filesystem.writeFile(activePath, JSON.stringify(data, null, 1));
+    } catch (e) { /* the file catches up on the next update */ }
+  };
 })();

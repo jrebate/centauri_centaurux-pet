@@ -107,6 +107,16 @@ rep("""  let last = now();
     ctx.fillText(fit(line, room), lx + 12, ly + 44);
   }
   let acceptBtn = null;
+  let backBtn = null;
+  function drawBackBtn() {
+    // Covers the battery icon, which means nothing on a desktop
+    const b = backBtn = { x: 722, y: 14, w: 66, h: 28 };
+    ctx.fillStyle = '#0d0f17'; ctx.fillRect(b.x - 4, b.y - 2, b.w + 8, b.h + 4);
+    ctx.fillStyle = '#e9dcc0'; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = '#141827'; ctx.fillRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
+    ctx.font = `400 16px ${PIX}`; ctx.fillStyle = '#e9dcc0'; ctx.textAlign = 'center';
+    ctx.fillText('Volver', b.x + b.w / 2, b.y + 19); ctx.textAlign = 'left';
+  }
 
   let last = now();
   function frame() {""")
@@ -116,6 +126,10 @@ rep("""    ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0d0f17'; ctx.fillRect(0, 0, W, H);""")
 rep("""const dt = Math.min(0.05, t - last);""", """const dt = Math.min(0.1, t - last);""")
 rep("""    if (!autoBox.checked || listening) return;""", """    if (!autoBox.checked || listening || window.__realData) return;""")
+rep("""    drawTopBar(t);
+    requestAnimationFrame(frame);""", """    drawTopBar(t);
+    drawBackBtn();
+    requestAnimationFrame(frame);""")
 rep("""  const start = () => requestAnimationFrame(frame);""", """  // Hooks for the desktop shell
   window.__mascota = {
     rotate, press, startTalk, endTalk, back,
@@ -128,9 +142,30 @@ rep("""  const start = () => requestAnimationFrame(frame);""", """  // Hooks for
       const b = acceptBtn;
       return b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h ? b.name : null;
     },
-    accept(name) {
-      const p = projects.find(q => q.name === name);
-      if (p) setState(p, 'sleeping', 'Recompensa recogida');
+    accept(name) { collectReward(projects.find(q => q.name === name)); },
+    get rewards() { return projects.filter(q => q.state === 'happy').length; },
+    acceptAll() {
+      const done = projects.filter(q => q.state === 'happy');
+      if (!done.length) return;
+      done.forEach(q => setState(q, 'sleeping', 'Recompensa recogida'));
+      chirp('happy');
+      if (window.__onAccept) window.__onAccept(done.map(q => q.name));
+    },
+    select(i) {
+      if (i === idx || !projects[i]) return;
+      const dir = i > idx ? 1 : -1;
+      idx = i; slide = { dir, at: now() }; answer = null; particles = []; syncPanel();
+    },
+    // Clickable spots: project squares (both modes) and the "Volver" button (big mode)
+    hitMarker(x, y) {
+      const i = petMode
+        ? (y >= 4 && y <= 24 && x >= 6 ? Math.floor((x - 7) / 16) : -1)
+        : (y >= 14 && y <= 42 && x >= 22 ? Math.floor((x - 22) / 28) : -1);
+      return i >= 0 && i < projects.length ? i : -1;
+    },
+    hitBack(x, y) {
+      const b = backBtn;
+      return !petMode && b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
     },
     loadReal(list) {
       // list: [{ name, state, status, updatedAt, forja? }]
@@ -190,6 +225,7 @@ canvas#screen {{ display: block; image-rendering: pixelated; cursor: grab; }}
 <body>
 <div id="stage"></div>
 <div id="menu" hidden>
+  <button type="button" data-act="rewards">Recoger recompensas</button>
   <button type="button" data-act="big">Abrir pantalla grande</button>
   <button type="button" data-act="pet">Volver a modo mascota</button>
   <button type="button" data-act="walk">Pasear: sí</button>

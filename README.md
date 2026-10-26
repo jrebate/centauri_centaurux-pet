@@ -14,10 +14,10 @@ Está inspirada en la idea de los equipos centauro de CentaurUX: la IA hace el t
 
 - **Un estado por proyecto.** Descansa, Estudia (pensando), Forja (trabajando), Te llama (espera tu respuesta), ¡Victoria! (terminado) y Herido (algo ha fallado).
 - **Forja por pasos.** Si la tarea tiene varios pasos, el centauro forja un objeto pieza a pieza: espada para crear, escudo para revisar, tomo para escribir y catalejo para investigar.
-- **Varios proyectos.** Los cuadraditos de arriba son tus proyectos; gira la rueda del ratón para pasar de uno a otro.
-- **Aceptar recompensa.** Cuando una tarea termina, pulsa el botón dorado para mandarla a dormir.
-- **Pantalla grande.** Haz clic para abrir la vista de 800×480 con el diario de cada misión; Esc para volver.
-- **Se mueve.** Arrástrala a donde quieras; de vez en cuando pasea un poco. Clic derecho para el menú (pasear, cambiar de personaje, cerrar).
+- **Varios proyectos.** Los cuadraditos de arriba son tus proyectos: haz clic en uno, gira la rueda del ratón o usa las flechas para pasar de uno a otro.
+- **Recoger recompensas.** Cuando una tarea termina, pulsa el botón dorado (o Enter) para mandarla a dormir. En la pantalla grande basta con pulsar, y con clic derecho puedes recogerlas todas de golpe.
+- **Pantalla grande.** Haz clic para abrir la vista de 800×480 con el diario de cada misión; el botón «Volver» (o Esc) te devuelve a la mascota.
+- **Se mueve.** Arrástrala a donde quieras; de vez en cuando pasea un poco. Clic derecho para el menú (recoger recompensas, pasear, cambiar de personaje, cerrar).
 
 ![Vista grande con el diario de la misión](docs/pantalla-grande.png)
 

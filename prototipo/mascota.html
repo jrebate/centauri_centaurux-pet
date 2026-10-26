@@ -745,10 +745,20 @@ canvas#screen { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; 
       const tw = stateTag(46 + sx, 394, p.state);
       ctx.fillStyle = '#8f8a99'; ctx.font = `400 22px ${TXT}`; ctx.textAlign = 'right';
       ctx.fillText(ago(now() - p.since), 756, 392); ctx.textAlign = 'left';
-      const lines = wrap(p.status, 700, `400 30px ${TXT}`).slice(0, 2);
+      const lines = wrap(p.status, p.state === 'happy' ? 330 : 700, `400 30px ${TXT}`).slice(0, 2);
       ctx.fillStyle = p.state === 'waiting' ? '#ffe28a' : '#f4ecd8'; ctx.font = `400 30px ${TXT}`;
       ctx.fillText(lines[0], 46 + sx, 432);
       if (lines[1]) ctx.fillText(lines[1], 46 + sx, 458);
+      if (p.state === 'happy') {
+        ctx.font = `400 20px ${PIX}`;
+        const bt = 'Pulsa para recoger la recompensa', bw = ctx.measureText(bt).width + 40;
+        const bx = 756 - bw, by = 410;
+        ctx.fillStyle = '#5d4a33'; ctx.fillRect(bx, by + 3, bw, 30);
+        ctx.fillStyle = Math.floor(t * 2) % 2 ? '#ffe28a' : '#f6c945'; ctx.fillRect(bx, by, bw, 30);
+        ctx.fillStyle = '#2a1d05';
+        ctx.fillRect(bx + 12, by + 9, 4, 12); ctx.fillRect(bx + 16, by + 11, 4, 8); ctx.fillRect(bx + 20, by + 13, 4, 4);
+        ctx.fillText(bt, bx + 30, by + 22);
+      }
       if (p.state === 'waiting' && Math.floor(t * 2.5) % 2) {
         ctx.fillStyle = '#f6c945';
         ctx.fillRect(744, 444, 16, 4); ctx.fillRect(748, 448, 8, 4); ctx.fillRect(750, 452, 4, 4);
@@ -802,7 +812,9 @@ canvas#screen { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; 
     }
     dialog(20, 342, 760, 128);
     ctx.fillStyle = '#f4ecd8'; ctx.font = `400 26px ${TXT}`;
-    const hint = p.state === 'waiting' ? ['Mantén el botón para contestar con la voz.', 'Pulsa la rueda para volver.'] : ['Gira la rueda para ver otra misión.', 'Pulsa la rueda para volver.'];
+    const hint = p.state === 'waiting' ? ['Mantén el botón para contestar con la voz.', 'Pulsa la rueda para volver.']
+      : p.state === 'happy' ? ['¡Misión cumplida!', 'Pulsa la rueda para recoger la recompensa.']
+      : ['Gira la rueda para ver otra misión.', 'Pulsa la rueda para volver.'];
     hint.forEach((h, i) => ctx.fillText(h, 46, 394 + i * 30));
     ctx.globalAlpha = 1;
   }
@@ -829,10 +841,19 @@ canvas#screen { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; 
     answer = null; particles = [];
     syncPanel();
   }
+  // Collects a finished mission's reward: it goes to sleep. The desktop app hooks in to save it.
+  function collectReward(p) {
+    if (!p || p.state !== 'happy') return false;
+    setState(p, 'sleeping', 'Recompensa recogida');
+    chirp('happy');
+    if (window.__onAccept) window.__onAccept([p.name]);
+    return true;
+  }
   function press() {
     ensureAudio();
     if (listening) return;
     if (answer) { answer = null; return; }
+    if (collectReward(projects[idx])) { view = 'pet'; slide = { dir: 0, at: now() }; return; }
     view = view === 'pet' ? 'detail' : 'pet';
     slide = { dir: 0, at: now() }; particles = [];
   }
