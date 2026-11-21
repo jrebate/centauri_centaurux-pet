@@ -294,9 +294,11 @@ static void lcd_init(void) {
     vTaskDelay(pdMS_TO_TICKS(120));
     esp_lcd_panel_init(panel);
     esp_lcd_panel_invert_color(panel, true);
-    // set the orientation explicitly (BGR, no mirroring), so a cold start can't leave it mirrored
+    // This panel scans right-to-left by default, so mirror X to show the picture the right way.
+    // (The first tests looked right without it only because the factory program had changed a
+    // scan-direction register that kept its value until the board lost power.)
     esp_lcd_panel_swap_xy(panel, false);
-    esp_lcd_panel_mirror(panel, false, false);
+    esp_lcd_panel_mirror(panel, true, false);
     esp_lcd_panel_disp_on_off(panel, true);
 }
 
