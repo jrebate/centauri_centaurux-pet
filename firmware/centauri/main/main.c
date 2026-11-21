@@ -647,7 +647,7 @@ static void wifi_init(void) {
         esp_wifi_set_config(WIFI_IF_STA, &sc);
         esp_wifi_start();
         esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
-        if (!(xEventGroupWaitBits(wifi_ev, GOT_IP, pdFALSE, pdFALSE, pdMS_TO_TICKS(25000)) & GOT_IP))
+        if (!(xEventGroupWaitBits(wifi_ev, GOT_IP, pdFALSE, pdFALSE, pdMS_TO_TICKS(40000)) & GOT_IP))
             start_setup_ap();
     } else {
         start_setup_ap();
@@ -689,7 +689,12 @@ static void draw(void) {
         return;
     }
     if (net_mode == NET_SETUP) {
-        draw_message("Configura el Wi-Fi", "Con\xc3\xa9" "ctate a la red", AP_SSID, "y abre 192.168.4.1", state_color[ST_WAITING]);
+        if (saved_ssid[0]) {
+            // a network is saved but wasn't found: say so, so it doesn't look forgotten
+            char b[48]; fit(b, sizeof b, saved_ssid, 170, 1);
+            draw_message("No encuentro el Wi-Fi", b, "Lo reintento cada minuto", "o cambia la red en 192.168.4.1", state_color[ST_WAITING]);
+        } else
+            draw_message("Configura el Wi-Fi", "Con\xc3\xa9" "ctate a la red", AP_SSID, "y abre 192.168.4.1", state_color[ST_WAITING]);
         return;
     }
     if (net_mode == NET_STARTING || net_mode == NET_CONNECTING) {
@@ -858,9 +863,9 @@ void app_main(void) {
         }
         down = now;
         if (hold_since && t - hold_since > 2000000 && t - hold_tick > 500000) { hold_tick = t; dirty = true; }
-        // saved Wi-Fi was not there at start-up (router off?): try it again every 3 minutes
+        // saved Wi-Fi was not there at start-up (router off?): try it again every minute
         // while nobody is using the setup page
-        if (net_mode == NET_SETUP && saved_ssid[0] && t - setup_since > 180000000LL) {
+        if (net_mode == NET_SETUP && saved_ssid[0] && t - setup_since > 60000000LL) {
             wifi_sta_list_t sl;
             if (esp_wifi_ap_get_sta_list(&sl) == ESP_OK && sl.num == 0) esp_restart();
             setup_since = t;

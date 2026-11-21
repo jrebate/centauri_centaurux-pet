@@ -1,0 +1,6 @@
+# Name,    Type, SubType, Offset,   Size
+# The settings (nvs: saved Wi-Fi and screen rotation) live at the END of the flash, so writing
+# a new full image from address 0x0 doesn't wipe them.
+phy_init,  data, phy,     0xf000,   0x1000
+factory,   app,  factory, 0x10000,  0x200000
+nvs,       data, nvs,     0x3F0000, 0x10000
