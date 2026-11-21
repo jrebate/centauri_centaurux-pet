@@ -154,7 +154,7 @@ static void lcd_init(void) {
     esp_lcd_panel_reset(panel);
     esp_lcd_panel_init(panel);
     esp_lcd_panel_invert_color(panel, true);
-    esp_lcd_panel_mirror(panel, true, false);
+    esp_lcd_panel_mirror(panel, false, false);
     esp_lcd_panel_disp_on_off(panel, true);
 }
 
