@@ -9,3 +9,9 @@ app/dist/
 # Your own status file
 estado.json
 !ejemplos/estado.json
+
+# ESP-IDF build output
+firmware/*/build/
+firmware/*/sdkconfig
+firmware/*/sdkconfig.old
+firmware/*/build*.log
