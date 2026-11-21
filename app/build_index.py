@@ -236,6 +236,7 @@ canvas#screen {{ display: block; image-rendering: pixelated; cursor: grab; }}
   <button type="button" data-act="char">Cambiar a guerrero sin caballo</button>
   <button type="button" data-act="screen">Pantalla redonda</button>
   <button type="button" data-act="demo">Demo automática: sí</button>
+  <button type="button" data-act="hide">Esconder (sigue la pantalla redonda)</button>
   <button type="button" data-act="exit">Cerrar la mascota</button>
 </div>
 <div id="hiddenUi" hidden>

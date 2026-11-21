@@ -8,7 +8,7 @@
   "enableNativeAPI": true,
   "tokenSecurity": "one-time",
   "logging": { "enabled": false, "writeToLogFile": false },
-  "nativeAllowList": ["app.*", "window.*", "events.*", "os.getEnv", "filesystem.readFile", "filesystem.writeFile", "computer.*", "storage.*"],
+  "nativeAllowList": ["app.*", "window.*", "events.*", "os.getEnv", "filesystem.readFile", "filesystem.writeFile", "computer.*", "storage.*", "os.setTray"],
   "modes": {
     "window": {
       "title": "Mascota de Claude",
@@ -20,6 +20,7 @@
       "borderless": true,
       "transparent": true,
       "alwaysOnTop": true,
+      "hidden": true,
       "center": true,
       "useSavedState": true,
       "exitProcessOnClose": true,

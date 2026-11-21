@@ -97,6 +97,7 @@
       const centaur = document.querySelector('#chars [data-char="centaur"]').getAttribute('aria-pressed') === 'true';
       document.querySelector(`#chars [data-char="${centaur ? 'nord' : 'centaur'}"]`).click();
     }
+    else if (act === 'hide') setVisible(false);
     else if (act === 'exit') { if (inNeu) Neutralino.app.exit(); else window.close(); }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { hideMenu(); if (!M.petMode) setBig(false); } });
@@ -143,7 +144,7 @@
       } catch (e) { /* missing or half-written file: try the next one, or keep the demo */ }
     }
   }
-  poll(); setInterval(poll, 5000);
+  poll();
 
   // ---- Collected rewards: the pet already shows them asleep; save that in estado.json too ----
   window.__onAccept = async names => {
@@ -185,7 +186,13 @@
     } catch (e) { screenOk = false; }
     finally { clearTimeout(t); }
   }
-  setInterval(sendToScreen, 3000);
+  // Timers in a hidden window are slowed down by the browser engine (down to once a minute),
+  // so the beat comes from a small worker, which isn't throttled.
+  let beat = 0;
+  try {
+    const w = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 1000)'], { type: 'text/javascript' })));
+    w.onmessage = () => { beat++; if (beat % 5 === 0) poll(); if (beat % 3 === 0) sendToScreen(); };
+  } catch (e) { setInterval(poll, 5000); setInterval(sendToScreen, 3000); }
   function askScreenAddress() {
     const v = window.prompt('Dirección de la pantalla redonda (la que sale en la pantalla, por ejemplo 192.168.1.40).\nDéjalo vacío para buscarla sola como centauri.local.', screenHost === 'centauri.local' ? '' : screenHost);
     if (v === null) return;
@@ -193,5 +200,32 @@
     screenOk = false; lastSent = '';
     if (inNeu) Neutralino.storage.setData('pantalla', screenHost === 'centauri.local' ? '' : screenHost).catch(() => {});
     sendToScreen();
+  }
+
+  // ---- Hidden by default: the pet keeps feeding the round screen from the background.
+  // An icon next to the clock shows or hides it; the choice is remembered.
+  async function setVisible(v) {
+    if (!inNeu) return;
+    try { if (v) { await Neutralino.window.show(); await Neutralino.window.focus(); } else await Neutralino.window.hide(); } catch (e) {}
+    Neutralino.storage.setData('visible', v ? '1' : '0').catch(() => {});
+  }
+  if (inNeu) {
+    Neutralino.os.setTray({
+      icon: '/resources/icon.png',
+      menuItems: [
+        { id: 'show', text: 'Mostrar la mascota' },
+        { id: 'hide', text: 'Esconder la mascota' },
+        { text: '-' },
+        { id: 'quit', text: 'Cerrar la mascota' },
+      ],
+    }).catch(() => {});
+    Neutralino.events.on('trayMenuItemClicked', e => {
+      const id = e.detail && e.detail.id;
+      if (id === 'show') setVisible(true);
+      else if (id === 'hide') setVisible(false);
+      else if (id === 'quit') Neutralino.app.exit();
+    });
+    // the window starts hidden (see neutralino.config.json); show it only if it was left visible
+    Neutralino.storage.getData('visible').then(v => { if (v === '1') setVisible(true); }).catch(() => {});
   }
 })();
