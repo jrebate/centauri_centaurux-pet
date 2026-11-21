@@ -500,11 +500,15 @@ static esp_err_t estado_post(httpd_req_t *req) {
     }
     strcat(reply, "]}");
     bool changed = n != n_projects || memcmp(tmp, projects, n * sizeof(project_t)) != 0 || last_post_us == 0;
+    // only a change of state (not of the status text) wakes the screen up
+    bool state_changed = n != n_projects;
+    for (int i = 0; i < n && !state_changed; i++) state_changed = tmp[i].state != projects[i].state;
     memcpy(projects, tmp, n * sizeof(project_t));
     n_projects = n;
     last_post_us = esp_timer_get_time();
     xSemaphoreGive(data_lock);
-    if (changed) { dirty = true; last_change_us = now_us; }
+    if (changed) dirty = true;
+    if (state_changed) last_change_us = now_us;
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, reply);
@@ -881,8 +885,11 @@ void app_main(void) {
         xSemaphoreTake(data_lock, portMAX_DELAY);
         for (int i = 0; i < n_projects; i++) if (projects[i].state != ST_SLEEPING) calm = false;
         xSemaphoreGive(data_lock);
+        // after a minute with no touch and no change of state the screen dims; a touch or a
+        // mission changing state brings it back. With everything asleep it dims further.
         int64_t quiet = t - (last_touch_us > last_change_us ? last_touch_us : last_change_us);
-        bl_set(calm && quiet > 60000000LL ? 20 : 255);
+        bool idle = net_mode == NET_ONLINE && quiet > 60000000LL && !hold_since;
+        bl_set(!idle ? 255 : calm ? 12 : 50);
         // turn the dial smoothly towards the selected mission (shortest way round)
         if (n_projects > 1) {
             float step = 360.0f / n_projects, target = sel * step;
