@@ -176,7 +176,12 @@
       // text/plain keeps it a "simple" request, so the browser doesn't need an extra permission round-trip
       const r = await fetch(`http://${screenHost}/estado`, { method: 'POST', body, headers: { 'Content-Type': 'text/plain' }, signal: ctl.signal });
       screenOk = r.ok;
-      if (r.ok) { lastSent = body; lastSentAt = Date.now(); }
+      if (r.ok) {
+        lastSent = body; lastSentAt = Date.now();
+        // rewards collected by tapping the round screen: collect them here too (saves estado.json)
+        const res = await r.json().catch(() => ({}));
+        if (Array.isArray(res.accepted) && res.accepted.length) { res.accepted.forEach(n => M.accept(n)); lastSent = ''; }
+      }
     } catch (e) { screenOk = false; }
     finally { clearTimeout(t); }
   }

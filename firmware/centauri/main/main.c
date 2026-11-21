@@ -13,6 +13,7 @@
 #include "freertos/semphr.h"
 #include "freertos/event_groups.h"
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 #include "driver/spi_master.h"
 #include "driver/i2c.h"
 #include "esp_lcd_panel_io.h"
@@ -85,6 +86,15 @@ static int n_projects;
 static int64_t last_post_us;        // 0 = never received anything
 static SemaphoreHandle_t data_lock;
 static volatile bool dirty = true;
+
+// Rewards collected by tapping a Victory on the screen. The screen shows them asleep at once;
+// the PC hears about them in the reply to its next update, and until its data catches up
+// the screen keeps them asleep.
+#define MAX_PEND 8
+typedef struct { char name[48]; bool told; int64_t until; } pending_t;
+static pending_t pend[MAX_PEND];
+static int n_pend;
+static int64_t last_change_us, last_touch_us, reward_flash_us;
 
 static const char *STATE_KEYS[6] = { "sleeping", "thinking", "working", "waiting", "happy", "worried" };
 static const char *STATE_LABEL[6] = { "Descansa", "Estudia", "Forja", "Te llama", "\xc2\xa1Victoria!", "Herido" };
@@ -230,11 +240,27 @@ static void touch_init(void) {
     i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
 }
 
+// ---------- Backlight (PWM, so it can dim) ----------
+static int bl_now = -1;
+static void bl_set(int duty) {
+    if (duty == bl_now) return;
+    bl_now = duty;
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+}
+static void bl_init(void) {
+    ledc_timer_config_t tc = { .speed_mode = LEDC_LOW_SPEED_MODE, .duty_resolution = LEDC_TIMER_8_BIT,
+                               .timer_num = LEDC_TIMER_0, .freq_hz = 5000, .clk_cfg = LEDC_AUTO_CLK };
+    ledc_timer_config(&tc);
+    ledc_channel_config_t cc = { .gpio_num = PIN_BL, .speed_mode = LEDC_LOW_SPEED_MODE, .channel = LEDC_CHANNEL_0,
+                                 .timer_sel = LEDC_TIMER_0, .duty = 0 };
+    ledc_channel_config(&cc);
+    bl_now = 0;
+}
+
 // ---------- Display ----------
 static void lcd_init(void) {
-    gpio_config_t bl = { .pin_bit_mask = 1ULL << PIN_BL, .mode = GPIO_MODE_OUTPUT };
-    gpio_config(&bl);
-    gpio_set_level(PIN_BL, 0);
+    bl_init();
     spi_bus_config_t bus = { .sclk_io_num = PIN_SCLK, .mosi_io_num = PIN_MOSI, .miso_io_num = -1,
                              .quadwp_io_num = -1, .quadhd_io_num = -1, .max_transfer_sz = W * BAND * 2 };
     ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &bus, SPI_DMA_CH_AUTO));
@@ -416,15 +442,36 @@ static esp_err_t estado_post(httpd_req_t *req) {
     cJSON_Delete(root);
 
     xSemaphoreTake(data_lock, portMAX_DELAY);
+    int64_t now_us = esp_timer_get_time();
+    for (int k = 0; k < n_pend; k++) {
+        bool keep = now_us < pend[k].until;
+        for (int i = 0; i < n && keep; i++) {
+            if (strcmp(tmp[i].name, pend[k].name)) continue;
+            if (tmp[i].state == ST_HAPPY) { tmp[i].state = ST_SLEEPING; strcpy(tmp[i].status, "Recompensa recogida"); }
+            else keep = false;      // the PC already has it
+        }
+        if (!keep) { pend[k] = pend[--n_pend]; k--; }
+    }
+    char reply[64 + MAX_PEND * 100] = "{\"ok\":true,\"accepted\":[";
+    bool first = true;
+    for (int k = 0; k < n_pend; k++) {
+        if (pend[k].told) continue;
+        pend[k].told = true;
+        cJSON *js = cJSON_CreateString(pend[k].name);
+        char *q = cJSON_PrintUnformatted(js);
+        if (q) { if (!first) strcat(reply, ","); strcat(reply, q); first = false; cJSON_free(q); }
+        cJSON_Delete(js);
+    }
+    strcat(reply, "]}");
     bool changed = n != n_projects || memcmp(tmp, projects, n * sizeof(project_t)) != 0 || last_post_us == 0;
     memcpy(projects, tmp, n * sizeof(project_t));
     n_projects = n;
     last_post_us = esp_timer_get_time();
     xSemaphoreGive(data_lock);
-    if (changed) dirty = true;
+    if (changed) { dirty = true; last_change_us = now_us; }
 
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"ok\":true}");
+    httpd_resp_sendstr(req, reply);
     return ESP_OK;
 }
 
@@ -651,13 +698,38 @@ static void draw(void) {
     fit(b, sizeof b, p.name, 168, sc);
     text_c(sc == 2 ? 52 : 48, b, sc, C_TEXT);
 
-    sprite(p.state, (W - SPR_W * 3) / 2, 60, 3);
+    // a little life: the centaur breathes (slowly when asleep) and sleeping missions snore
+    int64_t now_us = esp_timer_get_time();
+    float ph = (now_us % 1600000) / 1600000.0f * 6.2831853f;
+    if (p.state == ST_SLEEPING) ph = (now_us % 3200000) / 3200000.0f * 6.2831853f;
+    int bob = (int)lroundf(sinf(ph) * (p.state == ST_SLEEPING ? 1.0f : 2.0f));
+    if (p.state == ST_WORKING || p.state == ST_HAPPY) bob = (int)lroundf(fabsf(sinf(ph)) * -3.0f);
+    sprite(p.state, (W - SPR_W * 3) / 2, 60 + bob, 3);
+    if (p.state == ST_SLEEPING) {
+        int k = (now_us / 600000) % 3;
+        for (int i = 0; i <= k; i++) text(164 + i * 9, 84 - i * 10, "z", 1 + (i == 2), C_DIM);
+    }
+    if (reward_flash_us && now_us - reward_flash_us < 1800000) {
+        // golden sparkles around the centaur
+        static const int8_t SP[8][2] = { {-70,-10},{70,-18},{-58,40},{62,34},{-30,-36},{34,-40},{-76,18},{78,10} };
+        int f = (int)((now_us - reward_flash_us) / 150000);
+        for (int i = 0; i < 8; i++) {
+            if ((i + f) % 3 == 0) continue;
+            int cx = W / 2 + SP[i][0], cy = 118 + SP[i][1], r = 2 + (i + f) % 3;
+            rect(cx - r, cy, 2 * r + 1, 1, C_GOLD); rect(cx, cy - r, 1, 2 * r + 1, C_GOLD);
+        }
+    }
 
     if (p.piezas > 0 && p.state != ST_HAPPY)
         snprintf(b, sizeof b, "%s %d/%d", STATE_LABEL[p.state], p.hechas, p.piezas);
     else
         snprintf(b, sizeof b, "%s", STATE_LABEL[p.state]);
     text_c(192, b, 2, col);
+    if (p.state == ST_HAPPY) {
+        if (fresh) { fit(b, sizeof b, p.status, 150, 1); text_c(207, b, 1, C_TEXT); }
+        text_c(221, "Toca para recoger", 1, C_GOLD);
+        return;
+    }
 
     if (fresh) text_wrap2(207, p.status, 140, 1, C_TEXT);
     else text_c(207, "Sin noticias del PC", 1, C_DIM);
@@ -684,19 +756,19 @@ void app_main(void) {
     creds_load();
     if (saved_ssid[0]) net_mode = NET_CONNECTING;
     draw(); flush();
-    gpio_set_level(PIN_BL, 1);
+    bl_set(255);
     dirty = false;
 
     xTaskCreate((TaskFunction_t)wifi_init_task, "wifi", 6144, NULL, 5, NULL);
 
     bool down = false; int sx = 0, sy = 0, lx = 0, ly = 0;
-    int64_t last_tick = 0, hold_tick = 0;
+    int64_t last_tick = 0, hold_tick = 0, anim_tick = 0;
     for (;;) {
         int x, y;
         bool now = touch_read(&x, &y);
         int64_t t = esp_timer_get_time();
         if (now) {
-            if (!down) { sx = x; sy = y; hold_since = t; }
+            if (!down) { sx = x; sy = y; hold_since = t; last_touch_us = t; if (bl_now < 255) { bl_set(255); dirty = true; } }
             lx = x; ly = y;
             if (abs(lx - sx) > 20 || abs(ly - sy) > 20) hold_since = 0;
             if (hold_since && t - hold_since > 6000000) {
@@ -712,10 +784,22 @@ void app_main(void) {
             hold_since = 0;
             int dx = lx - sx, n = n_projects;
             if (was_hold) dirty = true;
-            else if (n > 1) {
-                if (dx > 40) sel = (sel + n - 1) % n;          // swipe right: previous mission
-                else if (dx < -40) sel = (sel + 1) % n;        // swipe left: next mission
-                else if (abs(ly - sy) < 25) sel = (sel + 1) % n;  // tap: next mission
+            else if (n > 1 && dx > 40) { sel = (sel + n - 1) % n; dirty = true; }    // swipe right: previous mission
+            else if (n > 1 && dx < -40) { sel = (sel + 1) % n; dirty = true; }       // swipe left: next mission
+            else if (abs(dx) < 25 && abs(ly - sy) < 25 && n > 0) {                   // tap
+                xSemaphoreTake(data_lock, portMAX_DELAY);
+                if (sel < n_projects && projects[sel].state == ST_HAPPY) {
+                    // collect the reward: asleep here now, and tell the PC
+                    project_t *pp = &projects[sel];
+                    pp->state = ST_SLEEPING; strcpy(pp->status, "Recompensa recogida");
+                    if (n_pend < MAX_PEND) {
+                        pending_t *q = &pend[n_pend++];
+                        snprintf(q->name, sizeof q->name, "%s", pp->name);
+                        q->told = false; q->until = t + 120000000LL;
+                    }
+                    reward_flash_us = t;
+                } else if (n > 1) sel = (sel + 1) % n;                                // tap elsewhere: next mission
+                xSemaphoreGive(data_lock);
                 dirty = true;
             }
         }
@@ -729,6 +813,18 @@ void app_main(void) {
             setup_since = t;
         }
         if (t - last_tick > 5000000) { last_tick = t; dirty = true; }   // catches "no news from the PC"
+
+        // animation frames while missions are on screen and the screen is bright
+        bool showing = net_mode == NET_ONLINE && n_projects > 0 && last_post_us;
+        if (showing && bl_now == 255 && t - anim_tick > 200000) { anim_tick = t; dirty = true; }
+
+        // dim the screen when everything is asleep and nobody has touched it for a minute
+        bool calm = net_mode == NET_ONLINE;
+        xSemaphoreTake(data_lock, portMAX_DELAY);
+        for (int i = 0; i < n_projects; i++) if (projects[i].state != ST_SLEEPING) calm = false;
+        xSemaphoreGive(data_lock);
+        int64_t quiet = t - (last_touch_us > last_change_us ? last_touch_us : last_change_us);
+        bl_set(calm && quiet > 60000000LL ? 20 : 255);
         if (dirty) { dirty = false; draw(); flush(); }
         vTaskDelay(pdMS_TO_TICKS(30));
     }
