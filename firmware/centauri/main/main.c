@@ -29,6 +29,7 @@
 #include "esp_http_server.h"
 #include "nvs_flash.h"
 #include "nvs.h"
+#include "esp_ota_ops.h"
 #include "mdns.h"
 #include "lwip/sockets.h"
 #include "cJSON.h"
@@ -365,6 +366,7 @@ static esp_err_t page_root(httpd_req_t *req) {
         html_escape(esc, sizeof esc, saved_ssid);
         snprintf(buf, sizeof buf, "<p>Conectado a <b>%s</b> con la direcci\xc3\xb3n <b>%s</b>.</p>", esc, net_ip);
         httpd_resp_sendstr_chunk(req, buf);
+        httpd_resp_sendstr_chunk(req, "<p><a href=/actualizar style='color:#ff9a5c'>Actualizar la pantalla a una versi\xc3\xb3n nueva</a></p>");
         httpd_resp_sendstr_chunk(req, "<p>Si quieres cambiar de red, escr\xc3\xad" "bela aqu\xc3\xad:</p>");
     } else {
         httpd_resp_sendstr_chunk(req, "<p>Elige tu red Wi\xe2\x80\x91" "Fi y escribe su contrase\xc3\xb1" "a. "
@@ -381,6 +383,86 @@ static esp_err_t page_root(httpd_req_t *req) {
 }
 
 static void restart_later(void *arg) { vTaskDelay(pdMS_TO_TICKS(1500)); esp_restart(); }
+
+// ---------- Update over Wi-Fi ----------
+// Accepts either the full image (the same .bin used with the USB cable: bootloader + partition
+// table + app) or just the app; for the full image it skips the first 64 KB and keeps the app.
+static volatile int ota_pct = -1;   // -1 = not updating
+
+static const char PAGE_OTA[] =
+    "<p>Elige el archivo <b>.bin</b> de la versi\xc3\xb3n nueva (el mismo que te paso para grabar por cable).</p>"
+    "<input type=file id=f accept=.bin><button id=b>Actualizar</button><p id=m></p>"
+    "<script>b.onclick=async()=>{const x=f.files[0];if(!x)return;b.disabled=true;"
+    "m.textContent='Subiendo\xe2\x80\xa6 no cierres esta p\xc3\xa1gina';"
+    "try{const r=await fetch('/actualizar',{method:'POST',body:x});m.textContent=await r.text();}"
+    "catch(e){m.textContent='Se ha cortado la conexi\xc3\xb3n. Prueba otra vez.';}b.disabled=false;}</script>";
+
+static esp_err_t ota_page(httpd_req_t *req) {
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_sendstr_chunk(req, PAGE_HEAD);
+    httpd_resp_sendstr_chunk(req, PAGE_OTA);
+    httpd_resp_sendstr_chunk(req, NULL);
+    return ESP_OK;
+}
+
+static int recv_full(httpd_req_t *req, uint8_t *buf, int len) {
+    int got = 0;
+    while (got < len) {
+        int r = httpd_req_recv(req, (char *)buf + got, len - got);
+        if (r == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (r <= 0) return -1;
+        got += r;
+    }
+    return got;
+}
+
+static esp_err_t ota_fail(httpd_req_t *req, const char *msg) {
+    ota_pct = -1; dirty = true;
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    httpd_resp_sendstr(req, msg);
+    return ESP_OK;
+}
+
+static esp_err_t ota_post(httpd_req_t *req) {
+    const int HEAD = 0x8002;
+    int total = req->content_len;
+    if (total < 0x1000) return ota_fail(req, "Ese archivo no parece una versi\xc3\xb3n de Centauri.");
+    int first = total < HEAD ? total : HEAD;
+    uint8_t *head = malloc(first);
+    if (!head) return ota_fail(req, "No hay memoria para actualizar. Reinicia la pantalla y prueba otra vez.");
+    if (recv_full(req, head, first) < 0) { free(head); return ota_fail(req, "Se ha cortado la subida. Prueba otra vez."); }
+
+    bool full_image = total > 0x10000 && first == HEAD && head[0x8000] == 0xAA && head[0x8001] == 0x50;
+    int skip = full_image ? 0x10000 : 0;
+    if (!full_image && head[0] != 0xE9) { free(head); return ota_fail(req, "Ese archivo no parece una versi\xc3\xb3n de Centauri."); }
+
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    esp_ota_handle_t h;
+    ota_pct = 0; dirty = true;
+    if (!part || esp_ota_begin(part, total - skip, &h) != ESP_OK) { free(head); return ota_fail(req, "No he podido preparar la actualizaci\xc3\xb3n."); }
+    if (!full_image && esp_ota_write(h, head, first) != ESP_OK) { free(head); esp_ota_abort(h); return ota_fail(req, "Fallo al escribir."); }
+    free(head);
+
+    static uint8_t buf[4096];
+    int pos = first;
+    while (pos < total) {
+        int n = total - pos < (int)sizeof buf ? total - pos : (int)sizeof buf;
+        if (recv_full(req, buf, n) < 0) { esp_ota_abort(h); return ota_fail(req, "Se ha cortado la subida. Prueba otra vez."); }
+        if (pos + n > skip) {
+            int off = pos < skip ? skip - pos : 0;
+            if (esp_ota_write(h, buf + off, n - off) != ESP_OK) { esp_ota_abort(h); return ota_fail(req, "Fallo al escribir."); }
+        }
+        pos += n;
+        int pct = (int)((int64_t)pos * 100 / total);
+        if (pct != ota_pct) { ota_pct = pct; dirty = true; }
+    }
+    if (esp_ota_end(h) != ESP_OK) return ota_fail(req, "El archivo est\xc3\xa1 da\xc3\xb1" "ado o no es para esta placa. No he cambiado nada.");
+    if (esp_ota_set_boot_partition(part) != ESP_OK) return ota_fail(req, "No he podido activar la versi\xc3\xb3n nueva.");
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    httpd_resp_sendstr(req, "\xc2\xa1Listo! La pantalla se reinicia con la versi\xc3\xb3n nueva.");
+    xTaskCreate(restart_later, "restart", 2048, NULL, 5, NULL);
+    return ESP_OK;
+}
 
 static esp_err_t page_wifi(httpd_req_t *req) {
     char body[256] = "";
@@ -525,7 +607,8 @@ static esp_err_t page_redirect(httpd_req_t *req, httpd_err_code_t err) {
 
 static void web_start(void) {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.max_uri_handlers = 8;
+    cfg.max_uri_handlers = 10;
+    cfg.recv_wait_timeout = 20;
     cfg.stack_size = 8192;
     cfg.lru_purge_enable = true;
     httpd_handle_t srv;
@@ -536,8 +619,10 @@ static void web_start(void) {
         { .uri = "/estado", .method = HTTP_GET, .handler = estado_get },
         { .uri = "/estado", .method = HTTP_POST, .handler = estado_post },
         { .uri = "/estado", .method = HTTP_OPTIONS, .handler = estado_options },
+        { .uri = "/actualizar", .method = HTTP_GET, .handler = ota_page },
+        { .uri = "/actualizar", .method = HTTP_POST, .handler = ota_post },
     };
-    for (int i = 0; i < 5; i++) httpd_register_uri_handler(srv, &u[i]);
+    for (int i = 0; i < 7; i++) httpd_register_uri_handler(srv, &u[i]);
     if (net_mode == NET_SETUP) httpd_register_err_handler(srv, HTTPD_404_NOT_FOUND, page_redirect);
 }
 
@@ -686,6 +771,11 @@ static void draw_message(const char *title, const char *l1, const char *l2, cons
 static void draw(void) {
     for (int i = 0; i < W * H; i++) fb[i] = C_BG;
 
+    if (ota_pct >= 0) {
+        char b[24]; snprintf(b, sizeof b, "%d %%", ota_pct);
+        draw_message("Actualizando\xe2\x80\xa6", b, "No la desenchufes", NULL, state_color[ST_THINKING]);
+        return;
+    }
     if (hold_since && esp_timer_get_time() - hold_since > 2000000) {
         int left = 6 - (int)((esp_timer_get_time() - hold_since) / 1000000);
         char b[48]; snprintf(b, sizeof b, "o sigue %d s para olvidar", left < 0 ? 0 : left);
