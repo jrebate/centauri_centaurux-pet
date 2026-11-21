@@ -11,7 +11,7 @@ Placa: ESP32-2424S012 (ESP32-C3, pantalla redonda GC9A01 de 240×240 y táctil C
 2. Abre http://192.168.4.1, elige tu red (solo 2,4 GHz), escribe la contraseña y pulsa **Guardar y conectar**.
 3. La pantalla se reinicia, se conecta y enseña su dirección. La app de escritorio la busca sola como `centauri.local`; si no la encuentra, clic derecho en la mascota → **Pantalla redonda** y escribe la dirección que sale en la pantalla.
 
-Para olvidar la red guardada, mantén el dedo quieto sobre la pantalla 6 segundos.
+Para girar la imagen 90°, mantén el dedo quieto sobre la pantalla unos 3 segundos y suelta. Para olvidar la red guardada, mantenlo 6 segundos.
 
 ## Cargarlo en la placa (sin instalar nada)
 

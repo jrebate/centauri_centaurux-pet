@@ -211,9 +211,27 @@ static bool on_flush_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_d
     xSemaphoreGiveFromISR(flush_done, &woke);
     return woke == pdTRUE;
 }
+// Screen rotation in 90-degree steps, done here in software so touch matches exactly.
+// Physical pixel (px,py) shows the drawn pixel returned by rot_src().
+static int rotation;    // 0..3, saved in NVS
+static inline void rot_src(int px, int py, int *lx, int *ly) {
+    switch (rotation) {
+        case 1: *lx = py; *ly = W - 1 - px; break;
+        case 2: *lx = W - 1 - px; *ly = H - 1 - py; break;
+        case 3: *lx = H - 1 - py; *ly = px; break;
+        default: *lx = px; *ly = py;
+    }
+}
 static void flush(void) {
     for (int y = 0; y < H; y += BAND) {
-        for (int i = 0; i < W * BAND; i++) { uint16_t v = pal[fb[y * W + i]]; band_buf[i] = (v >> 8) | (v << 8); }
+        if (rotation == 0) {
+            for (int i = 0; i < W * BAND; i++) { uint16_t v = pal[fb[y * W + i]]; band_buf[i] = (v >> 8) | (v << 8); }
+        } else {
+            for (int j = 0; j < BAND; j++) for (int x = 0; x < W; x++) {
+                int lx, ly; rot_src(x, y + j, &lx, &ly);
+                uint16_t v = pal[fb[ly * W + lx]]; band_buf[j * W + x] = (v >> 8) | (v << 8);
+            }
+        }
         esp_lcd_panel_draw_bitmap(panel, 0, y, W, y + BAND, band_buf);
         xSemaphoreTake(flush_done, portMAX_DELAY);
     }
@@ -271,10 +289,26 @@ static void lcd_init(void) {
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI2_HOST, &ioc, &io));
     esp_lcd_panel_dev_config_t pc = { .reset_gpio_num = -1, .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR, .bits_per_pixel = 16 };
     ESP_ERROR_CHECK(esp_lcd_new_panel_gc9a01(io, &pc, &panel));
+    vTaskDelay(pdMS_TO_TICKS(150));     // let the panel power up before talking to it
     esp_lcd_panel_reset(panel);
+    vTaskDelay(pdMS_TO_TICKS(120));
     esp_lcd_panel_init(panel);
     esp_lcd_panel_invert_color(panel, true);
+    // set the orientation explicitly (BGR, no mirroring), so a cold start can't leave it mirrored
+    esp_lcd_panel_swap_xy(panel, false);
+    esp_lcd_panel_mirror(panel, false, false);
     esp_lcd_panel_disp_on_off(panel, true);
+}
+
+// ---------- Saved rotation (NVS) ----------
+static void rotation_load(void) {
+    nvs_handle_t h; uint8_t r = 0;
+    if (nvs_open("pantalla", NVS_READONLY, &h) == ESP_OK) { nvs_get_u8(h, "giro", &r); nvs_close(h); }
+    rotation = r & 3;
+}
+static void rotation_save(void) {
+    nvs_handle_t h;
+    if (nvs_open("pantalla", NVS_READWRITE, &h) == ESP_OK) { nvs_set_u8(h, "giro", rotation); nvs_commit(h); nvs_close(h); }
 }
 
 // ---------- Saved Wi-Fi (NVS) ----------
@@ -648,8 +682,8 @@ static void draw(void) {
 
     if (hold_since && esp_timer_get_time() - hold_since > 2000000) {
         int left = 6 - (int)((esp_timer_get_time() - hold_since) / 1000000);
-        char b[48]; snprintf(b, sizeof b, "Sigue pulsando %d s", left < 0 ? 0 : left);
-        draw_message("Olvidar Wi-Fi", b, "para borrar la red guardada", NULL, state_color[ST_WORRIED]);
+        char b[48]; snprintf(b, sizeof b, "o sigue %d s para olvidar", left < 0 ? 0 : left);
+        draw_message("Suelta para girar", b, "el Wi-Fi guardado", NULL, state_color[ST_THINKING]);
         return;
     }
     if (net_mode == NET_SETUP) {
@@ -763,6 +797,7 @@ void app_main(void) {
     band_buf = heap_caps_malloc(W * BAND * 2, MALLOC_CAP_DMA);
     lcd_init();
     touch_init();
+    rotation_load();
     creds_load();
     if (saved_ssid[0]) net_mode = NET_CONNECTING;
     draw(); flush();
@@ -776,6 +811,7 @@ void app_main(void) {
     for (;;) {
         int x, y;
         bool now = touch_read(&x, &y);
+        if (now) { int px = x, py = y; rot_src(px, py, &x, &y); }   // touch in drawn coordinates
         int64_t t = esp_timer_get_time();
         if (now) {
             if (!down) { sx = x; sy = y; hold_since = t; last_touch_us = t; if (bl_now < 255) { bl_set(255); dirty = true; } }
@@ -793,7 +829,12 @@ void app_main(void) {
             bool was_hold = hold_since && t - hold_since > 2000000;
             hold_since = 0;
             int dx = lx - sx, n = n_projects;
-            if (was_hold) dirty = true;
+            if (was_hold) {
+                // hold 2-6 s and let go: turn the picture a quarter turn (saved for next time)
+                rotation = (rotation + 1) & 3;
+                rotation_save();
+                dirty = true;
+            }
             else if (n > 1 && dx > 40) { sel = (sel + n - 1) % n; dirty = true; }    // swipe right: previous mission
             else if (n > 1 && dx < -40) { sel = (sel + 1) % n; dirty = true; }       // swipe left: next mission
             else if (abs(dx) < 25 && abs(ly - sy) < 25 && n > 0) {                   // tap
