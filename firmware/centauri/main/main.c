@@ -29,6 +29,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "mdns.h"
+#include "lwip/sockets.h"
 #include "cJSON.h"
 #include "font.h"
 #include "sprites.h"
@@ -494,6 +495,34 @@ static void scan_networks(void) {
     free(recs);
 }
 
+// Tiny DNS server for setup mode: answers every name with 192.168.4.1, so phones see a
+// "sign in to network" page that opens the setup form by themselves.
+static void dns_task(void *arg) {
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    struct sockaddr_in a = { .sin_family = AF_INET, .sin_port = htons(53), .sin_addr.s_addr = htonl(INADDR_ANY) };
+    if (sock < 0 || bind(sock, (struct sockaddr *)&a, sizeof a) < 0) { vTaskDelete(NULL); return; }
+    uint8_t buf[512];
+    for (;;) {
+        struct sockaddr_in from; socklen_t fl = sizeof from;
+        int n = recvfrom(sock, buf, sizeof buf - 16, 0, (struct sockaddr *)&from, &fl);
+        if (n < 12 || (buf[2] & 0x80)) continue;
+        int q = 12;                                   // skip the question name
+        while (q < n && buf[q]) q += buf[q] + 1;
+        q += 5;                                       // end of name + type + class
+        if (q > n) continue;
+        bool is_a = buf[q - 4] == 0 && buf[q - 3] == 1;
+        buf[2] = 0x84; buf[3] = 0x00;                 // response, authoritative, no error
+        buf[6] = 0; buf[7] = is_a ? 1 : 0;            // one answer (only for A questions)
+        buf[8] = buf[9] = buf[10] = buf[11] = 0;
+        int len = q;
+        if (is_a) {
+            const uint8_t ans[16] = { 0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 30, 0, 4, 192, 168, 4, 1 };
+            memcpy(buf + q, ans, sizeof ans); len += sizeof ans;
+        }
+        sendto(sock, buf, len, 0, (struct sockaddr *)&from, fl);
+    }
+}
+
 static int64_t setup_since;
 static void start_setup_ap(void) {
     setup_since = esp_timer_get_time();
@@ -508,6 +537,7 @@ static void start_setup_ap(void) {
     esp_wifi_set_config(WIFI_IF_STA, &empty);
     esp_wifi_start();
     scan_networks();
+    xTaskCreate(dns_task, "dns", 3072, NULL, 4, NULL);
 }
 
 static void wifi_init(void) {
