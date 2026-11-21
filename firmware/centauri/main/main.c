@@ -628,6 +628,7 @@ static void wifi_init_task(void *arg) { wifi_init(); vTaskDelete(NULL); }
 
 // ---------- Screen ----------
 static int sel = 0;
+static float dial_rot = 0;    // degrees the dial is turned (eases towards sel)
 static int64_t hold_since = 0;
 
 static uint8_t C_BG, C_TEXT, C_DIM, C_GOLD, C_TRACK;
@@ -671,15 +672,24 @@ static void draw(void) {
     }
     if (sel >= n) sel = n - 1;
     project_t p = projects[sel];
+    int gem_state[MAX_P];
+    for (int i = 0; i < n; i++) gem_state[i] = projects[i].state;
     xSemaphoreGive(data_lock);
 
     uint8_t col = state_color[p.state];
-    ring(110, 119, col);
+    ring(111, 118, col);
 
-    // one dot per mission at the top, the selected one bigger
+    // the missions sit around the ring like gems on a dial; the selected one turns to the top
     if (n > 1) {
-        int gap = 14, x0 = W / 2 - (n - 1) * gap / 2;
-        for (int i = 0; i < n; i++) disc(x0 + i * gap, 24, i == sel ? 4 : 2, i == sel ? C_TEXT : C_DIM);
+        float step = 360.0f / n;
+        for (int i = 0; i < n; i++) {
+            float a = (i * step - dial_rot) * 0.01745329f;
+            int gx = W / 2 + (int)lroundf(sinf(a) * 114), gy = H / 2 - (int)lroundf(cosf(a) * 114);
+            bool on = i == sel;
+            disc(gx, gy, on ? 9 : 7, C_BG);
+            if (on) disc(gx, gy, 8, C_TEXT);
+            disc(gx, gy, on ? 6 : 5, state_color[gem_state[i]]);
+        }
     }
 
     // forge progress: a golden arc inside the ring, clockwise from the top
@@ -694,8 +704,8 @@ static void draw(void) {
     }
 
     char b[100];
-    int sc = text_width(p.name, 2) <= 168 ? 2 : 1;
-    fit(b, sizeof b, p.name, 168, sc);
+    int sc = text_width(p.name, 2) <= 140 ? 2 : 1;
+    fit(b, sizeof b, p.name, 140, sc);
     text_c(sc == 2 ? 52 : 48, b, sc, C_TEXT);
 
     // a little life: the centaur breathes (slowly when asleep) and sleeping missions snore
@@ -726,12 +736,12 @@ static void draw(void) {
         snprintf(b, sizeof b, "%s", STATE_LABEL[p.state]);
     text_c(192, b, 2, col);
     if (p.state == ST_HAPPY) {
-        if (fresh) { fit(b, sizeof b, p.status, 150, 1); text_c(207, b, 1, C_TEXT); }
+        if (fresh) { fit(b, sizeof b, p.status, 120, 1); text_c(207, b, 1, C_TEXT); }
         text_c(221, "Toca para recoger", 1, C_GOLD);
         return;
     }
 
-    if (fresh) text_wrap2(207, p.status, 140, 1, C_TEXT);
+    if (fresh) text_wrap2(207, p.status, 120, 1, C_TEXT);
     else text_c(207, "Sin noticias del PC", 1, C_DIM);
 }
 
@@ -825,6 +835,13 @@ void app_main(void) {
         xSemaphoreGive(data_lock);
         int64_t quiet = t - (last_touch_us > last_change_us ? last_touch_us : last_change_us);
         bl_set(calm && quiet > 60000000LL ? 20 : 255);
+        // turn the dial smoothly towards the selected mission (shortest way round)
+        if (n_projects > 1) {
+            float step = 360.0f / n_projects, target = sel * step;
+            float d = fmodf(target - dial_rot + 540.0f, 360.0f) - 180.0f;
+            if (fabsf(d) > 0.5f) { dial_rot += d * 0.35f; dirty = true; }
+            else if (dial_rot != target) { dial_rot = target; dirty = true; }
+        }
         if (dirty) { dirty = false; draw(); flush(); }
         vTaskDelay(pdMS_TO_TICKS(30));
     }
