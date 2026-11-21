@@ -167,6 +167,10 @@ rep("""  const start = () => requestAnimationFrame(frame);""", """  // Hooks for
       const b = backBtn;
       return !petMode && b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
     },
+    get snapshot() {
+      // what the round screen should show: the same missions the pet is showing
+      return projects.map(p => ({ name: p.name, state: p.state, status: p.status || '', forja: p.forja || undefined }));
+    },
     loadReal(list) {
       // list: [{ name, state, status, updatedAt, forja? }]
       const known = new Map(projects.map(p => [p.name, p]));
@@ -230,6 +234,7 @@ canvas#screen {{ display: block; image-rendering: pixelated; cursor: grab; }}
   <button type="button" data-act="pet">Volver a modo mascota</button>
   <button type="button" data-act="walk">Pasear: sí</button>
   <button type="button" data-act="char">Cambiar a guerrero sin caballo</button>
+  <button type="button" data-act="screen">Pantalla redonda</button>
   <button type="button" data-act="demo">Demo automática: sí</button>
   <button type="button" data-act="exit">Cerrar la mascota</button>
 </div>

@@ -69,6 +69,7 @@
     menu.querySelector('[data-act="pet"]').hidden = M.petMode;
     menu.querySelector('[data-act="walk"]').textContent = `Pasear: ${walkEnabled ? 'sí' : 'no'}`;
     menu.querySelector('[data-act="demo"]').textContent = window.__realData ? 'Datos reales de Claude' : `Demo automática: ${autoBox.checked ? 'sí' : 'no'}`;
+    menu.querySelector('[data-act="screen"]').textContent = screenOk ? 'Pantalla redonda: conectada' : 'Pantalla redonda: buscando…';
     menu.querySelector('[data-act="demo"]').disabled = !!window.__realData;
     const centaur = document.querySelector('#chars [data-char="centaur"]').getAttribute('aria-pressed') === 'true';
     menu.querySelector('[data-act="char"]').textContent = centaur ? 'Cambiar a guerrero sin caballo' : 'Cambiar a centauro';
@@ -90,6 +91,7 @@
     else if (act === 'big') setBig(true);
     else if (act === 'pet') setBig(false);
     else if (act === 'walk') { walkEnabled = !walkEnabled; M.walk.on = false; }
+    else if (act === 'screen') askScreenAddress();
     else if (act === 'demo') { autoBox.checked = !autoBox.checked; }
     else if (act === 'char') {
       const centaur = document.querySelector('#chars [data-char="centaur"]').getAttribute('aria-pressed') === 'true';
@@ -158,4 +160,33 @@
       if (changed) await Neutralino.filesystem.writeFile(activePath, JSON.stringify(data, null, 1));
     } catch (e) { /* the file catches up on the next update */ }
   };
+
+  // ---- Round screen (Centauri board) over Wi-Fi: sends it the missions every few seconds ----
+  // The board answers at http://centauri.local; if the network doesn't resolve that name,
+  // right-click > "Pantalla redonda" lets you type the address shown on the board.
+  let screenHost = 'centauri.local', screenOk = false, lastSent = '', lastSentAt = 0;
+  if (inNeu) Neutralino.storage.getData('pantalla').then(v => { if (v && v.trim()) screenHost = v.trim(); }).catch(() => {});
+  async function sendToScreen() {
+    if (!inNeu) return;
+    const body = JSON.stringify({ projects: M.snapshot });
+    if (screenOk && body === lastSent && Date.now() - lastSentAt < 30000) return;
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 4000);
+    try {
+      // text/plain keeps it a "simple" request, so the browser doesn't need an extra permission round-trip
+      const r = await fetch(`http://${screenHost}/estado`, { method: 'POST', body, headers: { 'Content-Type': 'text/plain' }, signal: ctl.signal });
+      screenOk = r.ok;
+      if (r.ok) { lastSent = body; lastSentAt = Date.now(); }
+    } catch (e) { screenOk = false; }
+    finally { clearTimeout(t); }
+  }
+  setInterval(sendToScreen, 3000);
+  function askScreenAddress() {
+    const v = window.prompt('Dirección de la pantalla redonda (la que sale en la pantalla, por ejemplo 192.168.1.40).\nDéjalo vacío para buscarla sola como centauri.local.', screenHost === 'centauri.local' ? '' : screenHost);
+    if (v === null) return;
+    screenHost = v.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'centauri.local';
+    screenOk = false; lastSent = '';
+    if (inNeu) Neutralino.storage.setData('pantalla', screenHost === 'centauri.local' ? '' : screenHost).catch(() => {});
+    sendToScreen();
+  }
 })();
